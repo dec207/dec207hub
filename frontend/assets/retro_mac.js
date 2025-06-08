@@ -59,7 +59,7 @@ class Dec207Hub {
 
     // ===== CHAT SYSTEM =====
     setupChat() {
-        const chatInput = document.querySelector('.dec207-input-field');
+        const chatInput = document.querySelector('#chat-input-field');
         const sendBtn = document.querySelector('.dec207-btn.primary');
         const chatForm = document.querySelector('.dec207-chat-form');
         
@@ -101,7 +101,7 @@ class Dec207Hub {
     sendMessage() {
         console.log('sendMessage 호출됨');
         
-        const chatInput = document.querySelector('.dec207-input-field');
+        const chatInput = document.querySelector('#chat-input-field');
         const message = chatInput?.value.trim();
         
         console.log('메시지 확인:', { message, isProcessing: this.isProcessingMessage });
@@ -463,6 +463,10 @@ class Dec207Hub {
                 this.websocket = null;
                 this.isConnected = false;
                 this.updateConnectionStatus(false);
+                if (!this.websocketErrorShown) {
+                    this.showNotification('AI 서버 연결 실패: 데모 모드로 전환', 3000);
+                    this.websocketErrorShown = true;
+                }
             }
         }, 15000);
         
@@ -491,9 +495,8 @@ class Dec207Hub {
                     console.log('🔌 WebSocket 연결 정상 종료');
                 } else {
                     console.log('❌ WebSocket 연결 실패 - 데모 모드로 전환');
-                    // 알림을 한 번만 표시
                     if (!this.websocketErrorShown) {
-                        this.showNotification('서버 연결 실패 - 데모 모드', 3000);
+                        this.showNotification('AI 서버 연결 실패: 데모 모드로 전환', 3000);
                         this.websocketErrorShown = true;
                     }
                 }
@@ -514,7 +517,7 @@ class Dec207Hub {
                 
                 // 오류 메시지를 한 번만 표시
                 if (!this.websocketErrorShown) {
-                    this.showNotification('서버 연결 오류', 3000);
+                    this.showNotification('AI 서버 연결 오류: 데모 모드로 전환', 3000);
                     this.websocketErrorShown = true;
                 }
                 
@@ -532,7 +535,10 @@ class Dec207Hub {
             this.isConnected = false;
             this.updateConnectionStatus(false);
             this.websocket = null;
-            this.showNotification('서버 연결 오류', 3000);
+            if (!this.websocketErrorShown) {
+                this.showNotification('AI 서버 연결 오류: 데모 모드로 전환', 3000);
+                this.websocketErrorShown = true;
+            }
             
             // 메시지 처리 중이라면 해제
             if (this.isProcessingMessage) {
@@ -685,7 +691,12 @@ class Dec207Hub {
 }
 
 // ===== AUTO INITIALIZATION =====
-const dec207Hub = new Dec207Hub();
+try {
+    const dec207Hub = new Dec207Hub();
+} catch (e) {
+    console.error('Dec207Hub 초기화 중 치명적인 오류 발생:', e);
+    alert('Dec207Hub 로딩 중 오류가 발생했습니다. 자세한 내용은 콘솔을 확인해주세요.');
+}
 
 // ===== GLOBAL HELPERS =====
 window.Dec207Hub = {
