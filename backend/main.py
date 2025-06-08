@@ -13,6 +13,7 @@ from typing import List, Dict, Any
 import logging
 import re
 import hashlib
+from fastapi.responses import FileResponse
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -20,14 +21,132 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Dec207Hub API", version="1.0.0")
 
-# CORS 설정 (프론트엔드 연결 허용)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # 개발 중에는 모든 origin 허용
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Ollama 설정
+OLLAMA_BASE_URL = "http://localhost:11434"
+DEFAULT_MODEL = "llama3.1:8b"  # 설치된 모델에 맞춤
+
+# WebSocket 엔드포인트를 정적 파일 마운트보다 먼저 정의하여 우선순위를 높임
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket을 통한 실시간 채팅 - 메시지 중복 방지 개선"""
+    await manager.connect(websocket)
+    
+    # 클라이언트 IP 추출
+    user_ip = chat_logger.get_client_ip(websocket)
+    
+    # 연결 로깅
+    chat_logger.log_session_event(user_ip, f"WebSocket 세션 시작 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"WebSocket 클라이언트 연결됨: {user_ip}")
+    
+    # 메시지 처리 상태 추적
+    processing_message = False
+    last_message_hash = None
+    
+    try:
+        while True:
+            # 클라이언트로부터 메시지 받기
+            data = await websocket.receive_text()
+            message_data = json.loads(data)
+            
+            # 데이터 처리 및 유효성 검사
+            message_type = message_data.get("type", "chat")  # 기본값은 chat
+            user_message = message_data.get("message", "").strip()
+            model = message_data.get("model", DEFAULT_MODEL)
+            conversation_history = message_data.get("conversation_history", [])
+            
+            # 메시지 타입이 chat이 아니면 무시
+            if message_type != "chat":
+                logger.warning(f"알 수 없는 메시지 타입: {message_type}")
+                continue
+            
+            # 메시지 중복 처리 방지 - 빈 메시지는 무시하지만 처리 중인 경우 대기
+            if not user_message:
+                continue
+                
+            if processing_message:
+                # 처리 중인 경우 대기 메시지 전송
+                await manager.send_personal_message(
+                    json.dumps({
+                        "type": "system",
+                        "message": "이전 메시지를 처리 중입니다. 잠시만 기다려주세요.",
+                        "timestamp": datetime.now().isoformat()
+                    }),
+                    websocket
+                )
+                continue
+                
+            # 동일한 메시지 중복 처리 방지 (해시 비교)
+            message_hash = hashlib.md5(f"{user_message}_{datetime.now().strftime('%Y%m%d%H%M')}".encode()).hexdigest()
+            if message_hash == last_message_hash:
+                logger.warning(f"중복 메시지 무시: {user_message[:30]}...")
+                continue
+                
+            # 처리 상태 플래그 설정
+            processing_message = True
+            last_message_hash = message_hash
+            
+            try:
+                logger.info(f"사용자 메시지 받음 ({user_ip}): {user_message[:50]}...")
+                
+                # 사용자 메시지 로깅
+                chat_logger.log_message(user_ip, "user", user_message)
+                
+                # AI 응답 생성 (대화 히스토리 포함)
+                start_time = datetime.now()
+                ai_response = await chat_with_ollama(user_message, model, conversation_history)
+                response_time = (datetime.now() - start_time).total_seconds()
+                
+                # AI 응답 로깅
+                chat_logger.log_message(user_ip, "assistant", ai_response, response_time, model)
+                
+                # 클라이언트에게 AI 응답 전송
+                response_data = {
+                    "type": "chat_response",
+                    "message": ai_response,
+                    "model": model,
+                    "response_time": response_time,
+                    "timestamp": datetime.now().isoformat(),
+                    "message_hash": message_hash  # 메시지 해시 반환
+                }
+                
+                await manager.send_personal_message(
+                    json.dumps(response_data), 
+                    websocket
+                )
+                
+            except Exception as e:
+                logger.error(f"메시지 처리 중 오류: {e}")
+                await manager.send_personal_message(
+                    json.dumps({
+                        "type": "error",
+                        "message": f"메시지 처리 오류: {str(e)}",
+                        "timestamp": datetime.now().isoformat()
+                    }),
+                    websocket
+                )
+            finally:
+                # 처리 완료 후 플래그 해제
+                processing_message = False
+                
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        chat_logger.log_session_event(user_ip, f"WebSocket 세션 종료 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"클라이언트 연결 해제됨: {user_ip}")
+    except Exception as e:
+        logger.error(f"WebSocket 오류 ({user_ip}): {str(e)}")
+        chat_logger.log_message(user_ip, "system", f"WebSocket 오류: {str(e)}")
+        await manager.send_personal_message(
+            json.dumps({
+                "type": "error",
+                "message": f"서버 오류: {str(e)}",
+                "timestamp": datetime.now().isoformat()
+            }), 
+            websocket
+        )
+
+# frontend 디렉토리를 정적 파일로 서빙 (html=True로 index.html 자동 서빙)
+frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
 
 # Ollama 설정
 OLLAMA_BASE_URL = "http://localhost:11434"
@@ -134,14 +253,6 @@ class ChatLogger:
 chat_logger = ChatLogger()
 
 # API 엔드포인트들
-@app.get("/")
-async def root():
-    return {
-        "message": "Dec207Hub API Server",
-        "version": "1.0.0",
-        "status": "running"
-    }
-
 @app.get("/health")
 async def health_check():
     """서버 상태 확인"""
@@ -298,124 +409,6 @@ async def chat_endpoint(request_body: Dict[str, Any], request: Request):
         "response_time": response_time,
         "timestamp": datetime.now().isoformat()
     }
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket을 통한 실시간 채팅 - 메시지 중복 방지 개선"""
-    await manager.connect(websocket)
-    
-    # 클라이언트 IP 추출
-    user_ip = chat_logger.get_client_ip(websocket)
-    
-    # 연결 로깅
-    chat_logger.log_session_event(user_ip, f"WebSocket 세션 시작 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    logger.info(f"WebSocket 클라이언트 연결됨: {user_ip}")
-    
-    # 메시지 처리 상태 추적
-    processing_message = False
-    last_message_hash = None
-    
-    try:
-        while True:
-            # 클라이언트로부터 메시지 받기
-            data = await websocket.receive_text()
-            message_data = json.loads(data)
-            
-            # 데이터 처리 및 유효성 검사
-            message_type = message_data.get("type", "chat")  # 기본값은 chat
-            user_message = message_data.get("message", "").strip()
-            model = message_data.get("model", DEFAULT_MODEL)
-            conversation_history = message_data.get("conversation_history", [])
-            
-            # 메시지 타입이 chat이 아니면 무시
-            if message_type != "chat":
-                logger.warning(f"알 수 없는 메시지 타입: {message_type}")
-                continue
-            
-            # 메시지 중복 처리 방지 - 빈 메시지는 무시하지만 처리 중인 경우 대기
-            if not user_message:
-                continue
-                
-            if processing_message:
-                # 처리 중인 경우 대기 메시지 전송
-                await manager.send_personal_message(
-                    json.dumps({
-                        "type": "system",
-                        "message": "이전 메시지를 처리 중입니다. 잠시만 기다려주세요.",
-                        "timestamp": datetime.now().isoformat()
-                    }),
-                    websocket
-                )
-                continue
-                
-            # 동일한 메시지 중복 처리 방지 (해시 비교)
-            message_hash = hashlib.md5(f"{user_message}_{datetime.now().strftime('%Y%m%d%H%M')}".encode()).hexdigest()
-            if message_hash == last_message_hash:
-                logger.warning(f"중복 메시지 무시: {user_message[:30]}...")
-                continue
-                
-            # 처리 상태 플래그 설정
-            processing_message = True
-            last_message_hash = message_hash
-            
-            try:
-                logger.info(f"사용자 메시지 받음 ({user_ip}): {user_message[:50]}...")
-                
-                # 사용자 메시지 로깅
-                chat_logger.log_message(user_ip, "user", user_message)
-                
-                # AI 응답 생성 (대화 히스토리 포함)
-                start_time = datetime.now()
-                ai_response = await chat_with_ollama(user_message, model, conversation_history)
-                response_time = (datetime.now() - start_time).total_seconds()
-                
-                # AI 응답 로깅
-                chat_logger.log_message(user_ip, "assistant", ai_response, response_time, model)
-                
-                # 클라이언트에게 AI 응답 전송
-                response_data = {
-                    "type": "chat_response",
-                    "message": ai_response,
-                    "model": model,
-                    "response_time": response_time,
-                    "timestamp": datetime.now().isoformat(),
-                    "message_hash": message_hash  # 메시지 해시 반환
-                }
-                
-                await manager.send_personal_message(
-                    json.dumps(response_data), 
-                    websocket
-                )
-                
-            except Exception as e:
-                logger.error(f"메시지 처리 중 오류: {e}")
-                await manager.send_personal_message(
-                    json.dumps({
-                        "type": "error",
-                        "message": f"메시지 처리 오류: {str(e)}",
-                        "timestamp": datetime.now().isoformat()
-                    }),
-                    websocket
-                )
-            finally:
-                # 처리 완료 후 플래그 해제
-                processing_message = False
-                
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        chat_logger.log_session_event(user_ip, f"WebSocket 세션 종료 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        logger.info(f"클라이언트 연결 해제됨: {user_ip}")
-    except Exception as e:
-        logger.error(f"WebSocket 오류 ({user_ip}): {str(e)}")
-        chat_logger.log_message(user_ip, "system", f"WebSocket 오류: {str(e)}")
-        await manager.send_personal_message(
-            json.dumps({
-                "type": "error",
-                "message": f"서버 오류: {str(e)}",
-                "timestamp": datetime.now().isoformat()
-            }), 
-            websocket
-        )
 
 if __name__ == "__main__":
     import uvicorn

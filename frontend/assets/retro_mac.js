@@ -6,6 +6,7 @@
 
 class Dec207Hub {
     constructor() {
+        console.log('Dec207Hub 스크립트 로드 및 초기화 시작...');
         this.conversationHistory = [];
         this.maxHistoryLength = 20;
         this.isConnected = false;
@@ -454,6 +455,7 @@ class Dec207Hub {
         
         const wsUrl = `ws://${SERVER_IP}:8000/ws`;
         console.log('🔌 WebSocket 연결 시도:', wsUrl);
+        this.addMessageToChat(`WebSocket 서버 연결 시도: ${SERVER_IP}:8000`, 'system');
         
         // 연결 타임아웃 설정 (15초) - 백엔드 처리 시간 고려
         const connectionTimeout = setTimeout(() => {
@@ -559,6 +561,13 @@ class Dec207Hub {
                 const sanitizedMessage = this.sanitizeMessage(data.message);
                 this.addMessageToChat(sanitizedMessage, 'ai');
                 this.isProcessingMessage = false; // 처리 완료
+
+                // TTS가 활성화되어 있으면 음성 출력
+                const speakerBtn = document.querySelector('.dec207-voice-btn.speaker.active');
+                if (this.synthesis && speakerBtn) {
+                    const cleanText = sanitizedMessage.replace(/<[^>]*>/g, '').replace(/```[\s\S]*?```/g, '코드 블록');
+                    this.speak(cleanText);
+                }
                 break;
             case 'system':
                 // 시스템 메시지 처리 (대기 메시지 등)
