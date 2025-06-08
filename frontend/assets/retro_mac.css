@@ -220,33 +220,6 @@ body {
     color: var(--macos-white);
 }
 
-/* ===== MENU BAR ===== */
-.dec207-menu-bar {
-    background: var(--macos-light-gray);
-    border-bottom: 1px solid var(--macos-gray);
-    height: 36px;
-    display: flex;
-    align-items: center;
-    padding: 0 var(--space-md);
-    gap: var(--space-lg);
-}
-
-.dec207-menu-item {
-    cursor: pointer;
-    padding: 6px var(--space-md);
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-    user-select: none;
-    transition: all 0.2s ease;
-    border-radius: 6px;
-    color: var(--macos-black);
-}
-
-.dec207-menu-item:hover {
-    background: var(--macos-blue);
-    color: var(--macos-white);
-}
-
 /* ===== CONTENT AREAS ===== */
 .dec207-content-area {
     height: calc(100% - 80px);
@@ -256,15 +229,6 @@ body {
 
 .dec207-content-area.no-menu {
     height: calc(100% - 44px);
-}
-
-.dec207-sidebar {
-    display: none; /* 사이드바 완전 숨김 */
-    width: 240px;
-    background: var(--macos-light-gray);
-    border-right: 1px solid var(--macos-gray);
-    padding: var(--space-md);
-    overflow-y: auto;
 }
 
 .dec207-main-content {

@@ -6,9 +6,6 @@
 
 class Dec207Hub {
     constructor() {
-        this.windows = [];
-        this.activeWindow = null;
-        this.zIndexCounter = 10;
         this.conversationHistory = [];
         this.maxHistoryLength = 20;
         this.isConnected = false;
@@ -37,10 +34,8 @@ class Dec207Hub {
     }
 
     setupAll() {
-        this.setupWindows();
         this.setupMenus();
         this.setupButtons();
-        this.setupSidebar();
         this.setupChat();
         this.setupVoice();
         this.setupWebSocket();
@@ -330,13 +325,7 @@ class Dec207Hub {
         }, 1000 + Math.random() * 2000);
     }
 
-
-
     // ===== 나머지 기본 메서드들 =====
-    setupWindows() {
-        console.log('윈도우 설정 완료');
-    }
-
     setupMenus() {
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('dec207-menu-item')) {
@@ -389,10 +378,6 @@ class Dec207Hub {
         setTimeout(() => {
             button.style.transform = '';
         }, 100);
-    }
-
-    setupSidebar() {
-        console.log('사이드바 숨김 모드');
     }
 
     setupVoice() {
@@ -673,10 +658,6 @@ class Dec207Hub {
             }));
     }
     
-
-    
-
-    
     clearChatHistory() {
         this.conversationHistory = [];
         const chatMessages = document.querySelector('.dec207-chat-messages');
@@ -690,16 +671,8 @@ class Dec207Hub {
         console.log('Dec207Hub 초기화 완료');
     }
 
-    createWindow() {
-        return document.createElement('div');
-    }
-
     toggleTheme() {
         document.body.classList.toggle('dark-mode');
-    }
-
-    playSystemSound() {
-        console.log('시스템 사운드');
     }
 
     connectBlender() {
@@ -716,10 +689,8 @@ const dec207Hub = new Dec207Hub();
 
 // ===== GLOBAL HELPERS =====
 window.Dec207Hub = {
-    createWindow: (options) => dec207Hub.createWindow(options),
     showDialog: (options) => dec207Hub.showDialog(options),
     showNotification: (message, duration) => dec207Hub.showNotification(message, duration),
-    playSound: () => dec207Hub.playSystemSound(),
     toggleTheme: () => dec207Hub.toggleTheme(),
     clearChat: () => dec207Hub.clearChatHistory(),
     connectBlender: () => dec207Hub.connectBlender(),
