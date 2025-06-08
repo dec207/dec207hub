@@ -11,6 +11,8 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any
 import logging
+import re
+import hashlib
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -56,7 +58,7 @@ manager = ConnectionManager()
 
 # 채팅 로거 클래스
 class ChatLogger:
-    def __init__(self, log_dir: str = "D:/DeepSeek/workspace/Dec207Hub/chat_logs"):
+    def __init__(self, log_dir: str = "chat_logs"):
         self.log_dir = log_dir
         self.ensure_log_directory()
     
@@ -84,7 +86,8 @@ class ChatLogger:
                 return websocket_or_request.client.host
             else:
                 return "unknown"
-        except:
+        except Exception as e:
+            logger.error(f"IP 주소 추출 중 오류 발생: {e}")
             return "unknown"
     
     def get_log_filename(self, user_ip: str):
@@ -260,7 +263,6 @@ def clean_ai_response(response: str) -> str:
     response = response.strip()
     
     # 과도한 특수기호 제거
-    import re
     response = re.sub(r'[\u2605\u2606\u25a0\u25cf\u25cb\u2661\u2665\u2668\u266a\u266b]{2,}', '', response)
     
     return response
@@ -347,7 +349,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
                 
             # 동일한 메시지 중복 처리 방지 (해시 비교)
-            import hashlib
             message_hash = hashlib.md5(f"{user_message}_{datetime.now().strftime('%Y%m%d%H%M')}".encode()).hexdigest()
             if message_hash == last_message_hash:
                 logger.warning(f"중복 메시지 무시: {user_message[:30]}...")
