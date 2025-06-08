@@ -11,9 +11,6 @@
     <!-- Custom Demo Styles -->
     <style>
         /* 전체화면 최적화 */
-        .demo-info {
-            display: none; /* 주황색 공지 제거 */
-        }
         
         .feature-list {
             list-style: none;
@@ -93,8 +90,6 @@
 
         <!-- 전체화면 채팅 컴테이너 -->
         <div class="fullscreen-chat">
-            <!-- 상단 메뉴 숨김 -->
-            <!-- <div class="dec207-menu-bar" style="display: none;"> -->
             
             <!-- 채팅 컴테이너 -->
             <div class="dec207-chat-container">
@@ -141,11 +136,6 @@
     
     <!-- Demo Functions -->
     <script>
-        // Demo-specific event handlers (사이드바 숨김으로 비활성화)
-        document.addEventListener('dec207-sidebar-select', (e) => {
-            console.log('사이드바 숨김 모드 - 이벤트 무시');
-        });
-
         // Voice Settings Dialog
         function showVoiceSettings() {
             Dec207Hub.showDialog({
