@@ -1,0 +1,21 @@
+# Dec207Hub Backend Requirements
+# Python 패키지 의존성
+
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+websockets==12.0
+httpx==0.25.2
+python-multipart==0.0.6
+pydantic==2.5.0
+
+# 추가 유틸리티
+python-dotenv==1.0.0
+aiofiles==23.2.1
+
+# 로깅 및 모니터링
+loguru==0.7.2
+
+# 개발 도구 (선택사항)
+# pytest==7.4.3
+# black==23.11.0
+# flake8==6.1.0

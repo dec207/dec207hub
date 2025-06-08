@@ -1,0 +1,16 @@
+{
+  "name": "dec207hub",
+  "version": "0.1.0",
+  "description": "웹기반 AI 채팅 데모서비스 with MCP Integration",
+  "author": "dec207",
+  "license": "MIT",
+  "keywords": ["ai", "chat", "ollama", "mcp", "blender", "unity"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dec207/Dec207Hub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dec207/Dec207Hub/issues"
+  },
+  "homepage": "https://github.com/dec207/Dec207Hub#readme"
+}

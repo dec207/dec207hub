@@ -1,0 +1,920 @@
+/* Dec207Hub - Mac OSX Style CSS Framework */
+/* Google Fonts @import 제거 - 리다이렉트 방지 */
+
+/* ===== RESET & BASE ===== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    /* Mac OSX Color Palette */
+    --macos-white: #ffffff;
+    --macos-light-gray: #f5f5f7;
+    --macos-gray: #e5e5e7;
+    --macos-medium-gray: #d1d1d6;
+    --macos-dark-gray: #8e8e93;
+    --macos-charcoal: #48484a;
+    --macos-black: #1d1d1f;
+    --macos-blue: #007aff;
+    --macos-blue-hover: #0056cc;
+    --macos-red: #ff3b30;
+    --macos-orange: #ff9500;
+    --macos-green: #34c759;
+    --macos-purple: #af52de;
+    
+    /* Mac OSX Window Colors */
+    --window-bg: rgba(255, 255, 255, 0.8);
+    --window-border: rgba(0, 0, 0, 0.1);
+    --title-bar-bg: rgba(246, 246, 246, 0.95);
+    --title-bar-border: rgba(0, 0, 0, 0.08);
+    
+    /* Mac OSX Spacing */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 32px;
+    
+    /* Mac OSX Typography - 로컬 시스템 폰트로 변경 */
+    --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+    --font-size-sm: 12px;
+    --font-size-base: 14px;
+    --font-size-lg: 16px;
+    --font-size-xl: 20px;
+    --font-size-2xl: 24px;
+    
+    /* Mac OSX Shadows */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 8px 25px rgba(0, 0, 0, 0.15);
+    --shadow-window: 0 25px 50px rgba(0, 0, 0, 0.25);
+}
+
+body {
+    font-family: var(--font-system);
+    font-size: var(--font-size-base);
+    line-height: 1.6;
+    color: var(--macos-black);
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* ===== DEC207HUB DESKTOP ===== */
+.dec207-desktop {
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(20px);
+}
+
+.dec207-logo {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: var(--macos-white);
+    font-family: var(--font-system);
+    font-weight: 600;
+    z-index: 1;
+    opacity: 0.8;
+    display: none; /* 로고 숨김 (전체화면이므로) */
+}
+
+.dec207-logo .hub-title {
+    font-size: var(--font-size-2xl);
+    margin-bottom: var(--space-sm);
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.dec207-logo .hub-subtitle {
+    font-size: var(--font-size-lg);
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 400;
+}
+
+/* ===== WINDOW SYSTEM ===== */
+.dec207-window {
+    position: absolute;
+    background: var(--window-bg);
+    border: 1px solid var(--window-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-window);
+    z-index: 10;
+    min-width: 320px;
+    min-height: 240px;
+    backdrop-filter: blur(30px);
+    overflow: hidden;
+}
+
+.dec207-window.centered {
+    top: 10%;
+    left: 10%;
+    width: 80%;
+    height: 75%;
+}
+
+.dec207-window.chat-window {
+    width: 90%;
+    height: 85%;
+    max-width: 1200px;
+    max-height: 800px;
+}
+
+.dec207-window.fullscreen {
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+}
+
+/* ===== TITLE BAR ===== */
+.dec207-title-bar {
+    background: var(--title-bar-bg);
+    border-bottom: 1px solid var(--title-bar-border);
+    height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-md);
+    justify-content: space-between;
+    cursor: move;
+    user-select: none;
+    border-radius: 12px 12px 0 0;
+    backdrop-filter: blur(30px);
+}
+
+.dec207-title-bar.active {
+    background: var(--title-bar-bg);
+}
+
+.dec207-title-bar-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.dec207-window-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.dec207-window-title {
+    font-weight: 600;
+    font-size: var(--font-size-base);
+    color: var(--macos-black);
+    letter-spacing: -0.2px;
+}
+
+.dec207-window-controls {
+    display: flex;
+    gap: var(--space-sm);
+    position: absolute;
+    left: var(--space-md);
+}
+
+.dec207-control-btn {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: bold;
+    user-select: none;
+    transition: all 0.2s ease;
+    color: transparent;
+}
+
+.dec207-control-btn:nth-child(1) {
+    background: var(--macos-red);
+}
+
+.dec207-control-btn:nth-child(2) {
+    background: var(--macos-orange);
+}
+
+.dec207-control-btn:nth-child(3) {
+    background: var(--macos-green);
+}
+
+.dec207-control-btn:hover {
+    transform: scale(1.1);
+    color: var(--macos-white);
+}
+
+/* ===== MENU BAR ===== */
+.dec207-menu-bar {
+    background: var(--macos-light-gray);
+    border-bottom: 1px solid var(--macos-gray);
+    height: 36px;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-md);
+    gap: var(--space-lg);
+}
+
+.dec207-menu-item {
+    cursor: pointer;
+    padding: 6px var(--space-md);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    user-select: none;
+    transition: all 0.2s ease;
+    border-radius: 6px;
+    color: var(--macos-black);
+}
+
+.dec207-menu-item:hover {
+    background: var(--macos-blue);
+    color: var(--macos-white);
+}
+
+/* ===== CONTENT AREAS ===== */
+.dec207-content-area {
+    height: calc(100% - 80px);
+    display: flex;
+    background: var(--macos-white);
+}
+
+.dec207-content-area.no-menu {
+    height: calc(100% - 44px);
+}
+
+.dec207-sidebar {
+    display: none; /* 사이드바 완전 숨김 */
+    width: 240px;
+    background: var(--macos-light-gray);
+    border-right: 1px solid var(--macos-gray);
+    padding: var(--space-md);
+    overflow-y: auto;
+}
+
+.dec207-main-content {
+    flex: 1;
+    padding: 0;
+    background: var(--macos-white);
+    overflow-y: auto;
+    position: relative;
+}
+
+/* ===== CHAT INTERFACE ===== */
+.dec207-chat-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.dec207-chat-header {
+    background: var(--macos-charcoal);
+    color: var(--macos-white);
+    padding: var(--space-md) var(--space-lg);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 500;
+}
+
+.dec207-chat-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.dec207-status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--macos-green);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.dec207-chat-messages {
+    flex: 1;
+    padding: var(--space-lg);
+    overflow-y: auto;
+    background: var(--macos-white);
+    color: var(--macos-black);
+    font-family: var(--font-system);
+}
+
+.dec207-message {
+    margin-bottom: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    border-radius: 18px;
+    max-width: 80%;
+    word-wrap: break-word;
+    font-size: var(--font-size-base);
+    line-height: 1.4;
+    white-space: pre-wrap; /* 줄바꿈 유지 */
+    word-break: break-word;
+}
+
+/* AI 메시지 코드 블록 스타일 */
+.dec207-message.ai .code-block {
+    background: var(--macos-charcoal);
+    color: var(--macos-white);
+    padding: var(--space-md);
+    border-radius: 8px;
+    margin: var(--space-sm) 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    overflow-x: auto;
+    white-space: pre;
+    line-height: 1.5;
+    border-left: 4px solid var(--macos-blue);
+}
+
+.dec207-message.ai .code-block .line-number {
+    color: var(--macos-dark-gray);
+    margin-right: var(--space-md);
+    user-select: none;
+    display: inline-block;
+    min-width: 30px;
+    text-align: right;
+}
+
+/* AI 메시지 인라인 코드 스타일 */
+.dec207-message.ai .inline-code {
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--macos-charcoal);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: calc(var(--font-size-base) - 1px);
+}
+
+/* AI 메시지 리스트 스타일 */
+.dec207-message.ai ul,
+.dec207-message.ai ol {
+    padding-left: var(--space-lg);
+    margin: var(--space-sm) 0;
+}
+
+.dec207-message.ai li {
+    margin-bottom: var(--space-xs);
+    line-height: 1.6;
+}
+
+/* AI 메시지 강조 텍스트 */
+.dec207-message.ai .bold {
+    font-weight: 600;
+    color: var(--macos-charcoal);
+}
+
+.dec207-message.ai .italic {
+    font-style: italic;
+}
+
+/* AI 메시지 단락 간격 */
+.dec207-message.ai .paragraph {
+    margin-bottom: var(--space-md);
+    line-height: 1.6;
+}
+
+/* 메시지 중복 방지용 스타일 */
+.dec207-message.duplicated {
+    opacity: 0.5;
+    border: 1px dashed var(--macos-red);
+}
+
+.dec207-message.processing {
+    opacity: 0.7;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.dec207-message.user {
+    background: var(--macos-blue);
+    color: var(--macos-white);
+    margin-left: auto;
+    text-align: right;
+}
+
+.dec207-message.ai {
+    background: var(--macos-gray);
+    color: var(--macos-black);
+}
+
+.dec207-message.system {
+    background: var(--macos-orange);
+    color: var(--macos-white);
+    text-align: center;
+    margin: 0 auto;
+    font-size: var(--font-size-sm);
+    border-radius: 12px;
+}
+
+.dec207-typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-md);
+    color: var(--macos-dark-gray);
+}
+
+.dec207-typing-dots {
+    display: flex;
+    gap: 2px;
+}
+
+.dec207-typing-dot {
+    width: 4px;
+    height: 4px;
+    background: var(--macos-dark-gray);
+    border-radius: 50%;
+    animation: typingAnimation 1.5s infinite;
+}
+
+.dec207-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.dec207-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingAnimation {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-6px); }
+}
+
+.dec207-chat-input {
+    background: var(--macos-white);
+    border-top: 1px solid var(--macos-gray);
+    padding: var(--space-lg);
+    display: flex;
+    gap: var(--space-md);
+    align-items: center;
+}
+
+/* Form 레이아웃 수정 */
+.dec207-chat-form {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    flex-wrap: nowrap; /* 줄바꿈 방지 */
+}
+
+.dec207-voice-controls {
+    display: flex;
+    gap: var(--space-sm);
+    flex-shrink: 0; /* 축소 방지 */
+}
+
+.dec207-input-field {
+    flex: 1;
+    padding: var(--space-md) var(--space-lg);
+    border: 1px solid var(--macos-medium-gray);
+    background: var(--macos-white);
+    color: var(--macos-black);
+    font-family: var(--font-system);
+    font-size: var(--font-size-base);
+    outline: none;
+    border-radius: 24px;
+    min-width: 200px;
+    width: 100%;
+    transition: all 0.2s ease;
+}
+
+.dec207-input-field::placeholder {
+    color: var(--macos-dark-gray);
+}
+
+.dec207-input-field:focus {
+    border-color: var(--macos-blue);
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+/* ===== BUTTONS ===== */
+.dec207-btn {
+    padding: var(--space-md) var(--space-lg);
+    border: none;
+    background: var(--macos-blue);
+    color: var(--macos-white);
+    cursor: pointer;
+    font-family: var(--font-system);
+    font-size: var(--font-size-base);
+    font-weight: 500;
+    user-select: none;
+    transition: all 0.2s ease;
+    border-radius: 8px;
+    box-shadow: var(--shadow-sm);
+}
+
+.dec207-btn:hover {
+    background: var(--macos-blue-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.dec207-btn:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-sm);
+}
+
+.dec207-btn.primary {
+    background: var(--macos-blue);
+    color: var(--macos-white);
+}
+
+.dec207-btn.primary:hover {
+    background: var(--macos-blue-hover);
+}
+
+.dec207-btn.danger {
+    background: var(--macos-red);
+    color: var(--macos-white);
+}
+
+.dec207-btn.danger:hover {
+    background: #e6342a;
+}
+
+.dec207-btn.small {
+    padding: var(--space-sm) var(--space-md);
+    font-size: var(--font-size-sm);
+    border-radius: 6px;
+}
+
+.dec207-btn.icon {
+    padding: var(--space-md);
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+/* ===== VOICE CONTROLS ===== */
+.dec207-voice-controls {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.dec207-voice-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: var(--macos-gray);
+    color: var(--macos-charcoal);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-lg);
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.dec207-voice-btn:hover {
+    background: var(--macos-medium-gray);
+    transform: scale(1.05);
+    box-shadow: var(--shadow-md);
+}
+
+.dec207-voice-btn.active {
+    background: var(--macos-blue);
+    color: var(--macos-white);
+}
+
+/* ===== SIDEBAR COMPONENTS ===== */
+.dec207-sidebar-section {
+    margin-bottom: var(--space-lg);
+}
+
+.dec207-sidebar-title {
+    background: var(--macos-charcoal);
+    color: var(--macos-white);
+    padding: var(--space-sm) var(--space-md);
+    margin-bottom: var(--space-sm);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    border-radius: 6px;
+}
+
+.dec207-sidebar-item {
+    padding: var(--space-sm) var(--space-md);
+    cursor: pointer;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+    transition: all 0.2s ease;
+    margin-bottom: 2px;
+    border-radius: 6px;
+    color: var(--macos-black);
+}
+
+.dec207-sidebar-item:hover {
+    background: var(--macos-blue);
+    color: var(--macos-white);
+}
+
+.dec207-sidebar-item.selected {
+    background: var(--macos-blue);
+    color: var(--macos-white);
+}
+
+/* ===== SCROLLBARS ===== */
+.dec207-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.dec207-scrollbar::-webkit-scrollbar-track {
+    background: var(--macos-light-gray);
+    border-radius: 4px;
+}
+
+.dec207-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--macos-medium-gray);
+    border-radius: 4px;
+}
+
+.dec207-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--macos-dark-gray);
+}
+
+/* ===== UTILITIES ===== */
+.dec207-hidden { display: none; }
+.dec207-flex { display: flex; }
+.dec207-flex-column { flex-direction: column; }
+.dec207-flex-center { justify-content: center; align-items: center; }
+.dec207-flex-between { justify-content: space-between; }
+.dec207-text-center { text-align: center; }
+.dec207-font-tech { font-family: var(--font-system); }
+.dec207-font-mono { font-family: var(--font-mono); }
+
+/* Spacing utilities */
+.dec207-m-0 { margin: 0; }
+.dec207-m-1 { margin: var(--space-xs); }
+.dec207-m-2 { margin: var(--space-sm); }
+.dec207-m-3 { margin: var(--space-md); }
+
+.dec207-p-0 { padding: 0; }
+.dec207-p-1 { padding: var(--space-xs); }
+.dec207-p-2 { padding: var(--space-sm); }
+.dec207-p-3 { padding: var(--space-md); }
+
+/* ===== NOTIFICATIONS ===== */
+.dec207-notification {
+    position: fixed;
+    top: var(--space-lg);
+    right: var(--space-lg);
+    background: var(--macos-charcoal);
+    color: var(--macos-white);
+    padding: var(--space-md) var(--space-lg);
+    border-radius: 12px;
+    font-family: var(--font-system);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    z-index: 9999;
+    max-width: 300px;
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(20px);
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOutRight {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+    .dec207-window.centered,
+    .dec207-window.chat-window {
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+    }
+    
+    .dec207-sidebar {
+        display: none !important;
+    }
+    
+    .dec207-message {
+        max-width: 95%;
+    }
+    
+    .dec207-chat-input {
+        padding: var(--space-md) !important;
+        gap: var(--space-md);
+        flex-wrap: nowrap !important; /* flex-wrap 제거 */
+        position: relative;
+        bottom: 0;
+        background: var(--macos-white);
+        border-top: 1px solid var(--macos-gray);
+    }
+    
+    .dec207-input-field {
+        flex: 1;
+        min-width: 200px;
+        font-size: 16px !important; /* 모바일 줄 바꿈 방지 */
+        padding: var(--space-md) var(--space-lg) !important;
+    }
+    
+    .dec207-voice-controls {
+        flex-shrink: 0;
+    }
+    
+    .dec207-btn.primary {
+        flex-shrink: 0;
+        min-width: 80px;
+        padding: var(--space-md) var(--space-lg) !important;
+    }
+    
+    /* 전체화면 채팅 모바일 최적화 */
+    .fullscreen-chat {
+        border-radius: 0;
+        height: 100vh !important;
+        height: calc(var(--vh, 1vh) * 100) !important; /* 모바일 사파리 지원 */
+        width: 100vw !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        z-index: 9999 !important;
+    }
+    
+    .dec207-chat-header {
+        padding: var(--space-md);
+        font-size: var(--font-size-sm);
+        flex-shrink: 0;
+    }
+    
+    .dec207-chat-messages {
+        padding: var(--space-md) !important;
+        flex: 1 !important;
+        overflow-y: auto !important;
+    }
+    
+    .dec207-chat-container {
+        height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .dec207-logo .hub-title {
+        font-size: var(--font-size-xl);
+    }
+    
+    .dec207-logo .hub-subtitle {
+        font-size: var(--font-size-base);
+    }
+    
+    .dec207-chat-input {
+        padding: var(--space-md) !important;
+        flex-direction: row !important; /* 가로 레이아웃 유지 */
+        flex-wrap: nowrap !important; /* 줄바꿈 방지 */
+        align-items: center !important;
+        gap: var(--space-sm) !important;
+        min-height: 60px !important;
+        background: var(--macos-white) !important;
+        border-top: 2px solid var(--macos-gray) !important;
+    }
+    
+    .dec207-input-field {
+        flex: 1 !important;
+        font-size: 16px !important; /* iOS 줄 바꿈 방지 */
+        padding: var(--space-md) !important;
+        border-radius: 20px !important;
+        border: 2px solid var(--macos-gray) !important;
+        margin: 0 !important;
+    }
+    
+    .dec207-voice-controls {
+        flex-shrink: 0;
+        margin: 0 !important;
+    }
+    
+    .dec207-voice-btn {
+        width: 48px !important;
+        height: 48px !important;
+        font-size: 20px !important;
+    }
+    
+    .dec207-btn.primary {
+        flex-shrink: 0;
+        min-width: 80px !important;
+        padding: var(--space-md) var(--space-lg) !important;
+        font-size: var(--font-size-base) !important;
+        border-radius: 20px !important;
+        height: 48px !important;
+    }
+    
+    .dec207-message {
+        max-width: 100%;
+        margin-bottom: var(--space-sm);
+        font-size: var(--font-size-sm) !important;
+    }
+    
+    .dec207-chat-header {
+        padding: var(--space-md) !important;
+        background: var(--macos-charcoal) !important;
+        color: var(--macos-white) !important;
+        flex-shrink: 0 !important;
+        min-height: 50px !important;
+    }
+    
+    .dec207-chat-messages {
+        padding: var(--space-sm) !important;
+        flex: 1 !important;
+        overflow-y: auto !important;
+        background: var(--macos-white) !important;
+    }
+    
+    /* 전체화면 컬테이너 모바일 최적화 */
+    .fullscreen-chat {
+        height: 100vh !important;
+        height: calc(var(--vh, 1vh) * 100) !important; /* 모바일 사파리 지원 */
+        width: 100vw !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        z-index: 9999 !important;
+        overflow: hidden !important;
+    }
+    
+    .dec207-chat-container {
+        height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+}
+
+/* ===== LOADING ANIMATIONS ===== */
+.dec207-loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--macos-medium-gray);
+    border-radius: 50%;
+    border-top-color: var(--macos-blue);
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ===== DARK THEME TOGGLE ===== */
+.dec207-desktop.dark-mode {
+    --macos-white: #1a1a1a;
+    --macos-light-gray: #2a2a2a;
+    --macos-gray: #3a3a3a;
+    --macos-medium-gray: #4a4a4a;
+    --macos-dark-gray: #6a6a6a;
+    --macos-charcoal: #f0f0f0;
+    --macos-black: #ffffff;
+    --window-bg: rgba(26, 26, 26, 0.9);
+    --title-bar-bg: rgba(42, 42, 42, 0.95);
+}
+
+/* ===== FOCUS STYLES ===== */
+.dec207-btn:focus,
+.dec207-input-field:focus,
+.dec207-voice-btn:focus {
+    outline: 2px solid var(--macos-blue);
+    outline-offset: 2px;
+}
+
+/* ===== SMOOTH TRANSITIONS ===== */
+* {
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}

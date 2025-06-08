@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dec207Hub Debug Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #000; color: #0f0; }
+        .debug-box { border: 1px solid #0f0; padding: 10px; margin: 10px 0; }
+        .error { color: #f00; }
+        .success { color: #0f0; }
+        .warning { color: #ff0; }
+        button { background: #0f0; color: #000; border: none; padding: 8px 16px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Dec207Hub 디버그 테스트</h1>
+    <div class="debug-box">
+        <h3>1. 기본 설정 확인</h3>
+        <div id="basic-status">검사 중...</div>
+    </div>
+    
+    <div class="debug-box">
+        <h3>2. 백엔드 연결 확인</h3>
+        <div id="backend-status">검사 중...</div>
+        <button onclick="testBackend()">백엔드 테스트</button>
+    </div>
+    
+    <div class="debug-box">
+        <h3>3. WebSocket 연결 확인</h3>
+        <div id="websocket-status">검사 중...</div>
+        <button onclick="testWebSocket()">WebSocket 테스트</button>
+    </div>
+    
+    <div class="debug-box">
+        <h3>4. JavaScript 오류 확인</h3>
+        <div id="js-errors">검사 중...</div>
+        <button onclick="testJavaScript()">JS 테스트</button>
+    </div>
+    
+    <div class="debug-box">
+        <h3>5. 메시지 전송 테스트</h3>
+        <input type="text" id="test-message" placeholder="테스트 메시지 입력" style="width: 300px; padding: 8px;">
+        <button onclick="sendTestMessage()">전송 테스트</button>
+        <div id="message-result"></div>
+    </div>
+    
+    <div class="debug-box">
+        <h3>6. 로그 확인</h3>
+        <div id="log-output" style="max-height: 200px; overflow-y: auto; background: #111; padding: 10px;"></div>
+        <button onclick="clearLog()">로그 지우기</button>
+    </div>
+
+    <script>
+        // 로그 함수
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log-output');
+            const time = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : '';
+            logDiv.innerHTML += `<div class="${className}">[${time}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[DEBUG] ${message}`);
+        }
+
+        function clearLog() {
+            document.getElementById('log-output').innerHTML = '';
+        }
+
+        // 1. 기본 설정 확인
+        function checkBasicSetup() {
+            const basicDiv = document.getElementById('basic-status');
+            let status = '';
+            
+            // 현재 URL 확인
+            status += `📍 현재 URL: ${window.location.href}\n`;
+            
+            // localStorage 확인
+            try {
+                localStorage.setItem('test', 'test');
+                localStorage.removeItem('test');
+                status += `✅ localStorage 사용 가능\n`;
+            } catch (e) {
+                status += `❌ localStorage 사용 불가: ${e.message}\n`;
+            }
+            
+            // 브라우저 정보
+            status += `🌐 브라우저: ${navigator.userAgent.substring(0, 50)}...\n`;
+            
+            basicDiv.innerHTML = `<pre>${status}</pre>`;
+            log('기본 설정 확인 완료');
+        }
+
+        // 2. 백엔드 연결 테스트
+        async function testBackend() {
+            const backendDiv = document.getElementById('backend-status');
+            backendDiv.innerHTML = '⏳ 백엔드 연결 테스트 중...';
+            
+            try {
+                // 서버 IP 자동 감지
+                let serverIP = 'localhost';
+                if (window.location.protocol !== 'file:' && 
+                    window.location.hostname !== 'localhost' && 
+                    window.location.hostname !== '127.0.0.1') {
+                    serverIP = window.location.hostname;
+                }
+                
+                const healthUrl = `http://${serverIP}:8000/health`;
+                log(`백엔드 URL: ${healthUrl}`);
+                
+                const response = await fetch(healthUrl);
+                const data = await response.json();
+                
+                let status = `✅ 백엔드 연결 성공\n`;
+                status += `📊 서버 상태: ${data.server}\n`;
+                status += `🤖 Ollama: ${data.ollama}\n`;
+                status += `🔗 활성 연결: ${data.active_connections}\n`;
+                status += `⏰ 시간: ${data.timestamp}\n`;
+                
+                backendDiv.innerHTML = `<pre class="success">${status}</pre>`;
+                log('백엔드 연결 성공', 'success');
+                
+            } catch (error) {
+                const errorMsg = `❌ 백엔드 연결 실패: ${error.message}`;
+                backendDiv.innerHTML = `<pre class="error">${errorMsg}</pre>`;
+                log(`백엔드 연결 실패: ${error.message}`, 'error');
+            }
+        }
+
+        // 3. WebSocket 연결 테스트
+        function testWebSocket() {
+            const wsDiv = document.getElementById('websocket-status');
+            wsDiv.innerHTML = '⏳ WebSocket 연결 테스트 중...';
+            
+            // 서버 IP 자동 감지
+            let serverIP = 'localhost';
+            if (window.location.protocol !== 'file:' && 
+                window.location.hostname !== 'localhost' && 
+                window.location.hostname !== '127.0.0.1') {
+                serverIP = window.location.hostname;
+            }
+            
+            const wsUrl = `ws://${serverIP}:8000/ws`;
+            log(`WebSocket URL: ${wsUrl}`);
+            
+            const testWs = new WebSocket(wsUrl);
+            
+            testWs.onopen = () => {
+                wsDiv.innerHTML = '<pre class="success">✅ WebSocket 연결 성공</pre>';
+                log('WebSocket 연결 성공', 'success');
+                
+                // 테스트 메시지 전송
+                const testMessage = {
+                    message: "연결 테스트",
+                    model: "llama3.1:8b",
+                    conversation_history: [],
+                    timestamp: new Date().toISOString()
+                };
+                
+                testWs.send(JSON.stringify(testMessage));
+                log('테스트 메시지 전송됨');
+            };
+            
+            testWs.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                log(`WebSocket 응답: ${data.type} - ${data.message?.substring(0, 50)}...`, 'success');
+                testWs.close();
+            };
+            
+            testWs.onerror = (error) => {
+                wsDiv.innerHTML = `<pre class="error">❌ WebSocket 연결 실패</pre>`;
+                log(`WebSocket 오류: ${error}`, 'error');
+            };
+            
+            testWs.onclose = () => {
+                log('WebSocket 연결 종료');
+            };
+        }
+
+        // 4. JavaScript 테스트
+        function testJavaScript() {
+            const jsDiv = document.getElementById('js-errors');
+            
+            try {
+                // Dec207Hub 클래스 존재 확인
+                if (typeof Dec207Hub === 'undefined') {
+                    throw new Error('Dec207Hub 클래스가 로드되지 않음');
+                }
+                
+                // DOM 요소 확인
+                const requiredElements = [
+                    '.dec207-input-field',
+                    '.dec207-btn.primary',
+                    '.dec207-chat-messages'
+                ];
+                
+                let status = '✅ JavaScript 기본 체크 통과\n';
+                
+                requiredElements.forEach(selector => {
+                    const element = document.querySelector(selector);
+                    if (element) {
+                        status += `✅ ${selector} 요소 존재\n`;
+                    } else {
+                        status += `❌ ${selector} 요소 없음\n`;
+                    }
+                });
+                
+                jsDiv.innerHTML = `<pre>${status}</pre>`;
+                log('JavaScript 테스트 완료');
+                
+            } catch (error) {
+                jsDiv.innerHTML = `<pre class="error">❌ JavaScript 오류: ${error.message}</pre>`;
+                log(`JavaScript 오류: ${error.message}`, 'error');
+            }
+        }
+
+        // 5. 메시지 전송 테스트
+        function sendTestMessage() {
+            const messageInput = document.getElementById('test-message');
+            const resultDiv = document.getElementById('message-result');
+            const message = messageInput.value.trim();
+            
+            if (!message) {
+                resultDiv.innerHTML = '<span class="warning">⚠️ 메시지를 입력하세요</span>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '⏳ 메시지 전송 중...';
+            log(`테스트 메시지 전송: ${message}`);
+            
+            // 시뮬레이션된 메시지 전송
+            setTimeout(() => {
+                resultDiv.innerHTML = '<span class="success">✅ 메시지 전송 완료 (시뮬레이션)</span>';
+                log('테스트 메시지 전송 완료', 'success');
+                messageInput.value = '';
+            }, 1000);
+        }
+
+        // 초기화
+        window.addEventListener('load', () => {
+            log('디버그 페이지 로드됨');
+            checkBasicSetup();
+            
+            // 자동으로 백엔드 테스트 실행
+            setTimeout(testBackend, 1000);
+        });
+
+        // 오류 캐치
+        window.addEventListener('error', (e) => {
+            log(`JavaScript 오류: ${e.error}`, 'error');
+        });
+    </script>
+</body>
+</html>

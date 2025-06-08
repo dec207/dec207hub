@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Dec207Hub - AI Chat Demo</title>
+    
+    <!-- Dec207Hub Retro Mac CSS -->
+    <link rel="stylesheet" href="./assets/retro_mac.css">
+    
+    <!-- Custom Demo Styles -->
+    <style>
+        /* 전체화면 최적화 */
+        .demo-info {
+            display: none; /* 주황색 공지 제거 */
+        }
+        
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-list li {
+            padding: 4px 0;
+            border-bottom: 1px solid var(--gray-light);
+        }
+        
+        .feature-list li:before {
+            content: "🤖 ";
+            margin-right: 8px;
+        }
+        
+        .model-info {
+            background: var(--primary-black);
+            color: var(--terminal-green);
+            padding: 8px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            border-radius: 2px;
+            margin: 4px 0;
+        }
+        
+        /* 전체화면 채팅 컴테이너 */
+        .fullscreen-chat {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: var(--macos-white);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 채팅 컨테이너 레이아웃 수정 */
+        .fullscreen-chat .dec207-chat-container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 채팅 메시지 영역이 남은 공간을 모두 사용 */
+        .fullscreen-chat .dec207-chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--space-md);
+        }
+        
+        /* 입력 영역이 하단에 고정 */
+        .fullscreen-chat .dec207-chat-input {
+            flex-shrink: 0;
+            background: var(--macos-white);
+            border-top: 1px solid var(--macos-gray);
+            padding: var(--space-md);
+        }
+        
+        /* 모바일 최적화 */
+        @media (max-width: 768px) {
+            .dec207-sidebar {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dec207-desktop">
+        <!-- Logo -->
+        <div class="dec207-logo">
+            <div class="hub-title">Dec207Hub</div>
+            <div class="hub-subtitle">AI Chat System</div>
+        </div>
+
+        <!-- 전체화면 채팅 컴테이너 -->
+        <div class="fullscreen-chat">
+            <!-- 상단 메뉴 숨김 -->
+            <!-- <div class="dec207-menu-bar" style="display: none;"> -->
+            
+            <!-- 채팅 컴테이너 -->
+            <div class="dec207-chat-container">
+                <!-- Chat Header -->
+                <div class="dec207-chat-header">
+                    <div class="dec207-chat-status">
+                        <div class="dec207-status-indicator"></div>
+                        <span>DEMO MODE</span>
+                    </div>
+                    <div class="dec207-font-tech">
+                        Dec207Hub v1.0
+                    </div>
+                </div>
+
+                <!-- Chat Messages Area -->
+                <div class="dec207-chat-messages dec207-scrollbar">
+                    <!-- Messages will be added here dynamically -->
+                </div>
+
+                <!-- Chat Input -->
+                <div class="dec207-chat-input">
+                    <form class="dec207-chat-form">
+                        <input type="text" 
+                               class="dec207-input-field" 
+                               placeholder="메시지를 입력하세요... (Enter로 전송)"
+                               autocomplete="off">
+                        
+                        <div class="dec207-voice-controls">
+                            <button type="button" class="dec207-voice-btn speaker" title="TTS 토글">🔊</button>
+                        </div>
+                        
+                        <button type="button" class="dec207-btn primary">전송</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dec207Hub Configuration -->
+    <script src="./config.js"></script>
+    
+    <!-- Dec207Hub Retro Mac JavaScript -->
+    <script src="./assets/retro_mac.js"></script>
+    
+    <!-- Demo Functions -->
+    <script>
+        // Demo-specific event handlers (사이드바 숨김으로 비활성화)
+        document.addEventListener('dec207-sidebar-select', (e) => {
+            console.log('사이드바 숨김 모드 - 이벤트 무시');
+        });
+
+        // Voice Settings Dialog
+        function showVoiceSettings() {
+            Dec207Hub.showDialog({
+                title: 'Voice Settings',
+                message: `
+                    <div style="text-align: left;">
+                        <h4>음성 설정</h4>
+                        <p><strong>STT Language:</strong> 한국어 (ko-KR)</p>
+                        <p><strong>TTS Language:</strong> 한국어 (ko-KR)</p>
+                        <p><strong>Voice Rate:</strong> 0.9</p>
+                        <p><strong>Voice Pitch:</strong> 1.0</p>
+                        <br>
+                        <div class="model-info">
+                            브라우저의 Web Speech API를 사용합니다.<br>
+                            Chrome/Edge에서 최적화되어 있습니다.
+                        </div>
+                    </div>
+                `,
+                buttons: ['확인']
+            });
+        }
+
+        // Export Chat History
+        function exportChatHistory() {
+            const chatMessages = document.querySelectorAll('.dec207-message');
+            let exportText = '=== Dec207Hub Chat Export ===\n\n';
+            
+            chatMessages.forEach(msg => {
+                const sender = msg.classList.contains('user') ? 'USER' : 
+                              msg.classList.contains('ai') ? 'AI' : 'SYSTEM';
+                exportText += `[${sender}] ${msg.textContent}\n`;
+            });
+            
+            exportText += `\n=== Exported at ${new Date().toLocaleString()} ===`;
+            
+            // Create download link
+            const blob = new Blob([exportText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `dec207hub_chat_${Date.now()}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            Dec207Hub.showNotification('채팅 기록이 내보내졌습니다.');
+        }
+
+        // Demo Model Information
+        function showModelInfo() {
+            Dec207Hub.showDialog({
+                title: 'AI Model Information',
+                message: `
+                    <div style="text-align: left;">
+                        <h4>현재 모델: Qwen3:7B (Demo)</h4>
+                        <ul class="feature-list">
+                            <li>Tool Calling 지원</li>
+                            <li>한국어 최적화</li>
+                            <li>MCP 프로토콜 호환</li>
+                            <li>실시간 응답</li>
+                        </ul>
+                        <div class="model-info">
+                            실제 사용을 위해서는 Ollama 서버와<br>
+                            Python FastAPI 백엔드가 필요합니다.
+                        </div>
+                    </div>
+                `,
+                buttons: ['확인']
+            });
+        }
+
+        // Menu click handlers
+        document.addEventListener('dec207-menu-click', (e) => {
+            const menu = e.detail.menu;
+            
+            switch(menu) {
+                case 'file':
+                    Dec207Hub.showNotification('파일 메뉴 (준비중)');
+                    break;
+                case 'edit':
+                    Dec207Hub.showNotification('편집 메뉴 (준비중)');
+                    break;
+                case 'view':
+                    Dec207Hub.toggleTheme();
+                    break;
+                case 'blender':
+                    Dec207Hub.connectBlender();
+                    break;
+                case 'unity':
+                    Dec207Hub.connectUnity();
+                    break;
+                case 'help':
+                    // Override default help
+                    showAboutDialog();
+                    break;
+            }
+        });
+
+        function showAboutDialog() {
+            Dec207Hub.showDialog({
+                title: 'About Dec207Hub',
+                message: `
+                    <div style="text-align: center;">
+                        <h2 style="color: #00ff00; font-family: Orbitron;">Dec207Hub</h2>
+                        <p><strong>Version:</strong> 1.0.0 (Demo)</p>
+                        <p><strong>Created by:</strong> dec207</p>
+                        <br>
+                        <div style="text-align: left;">
+                            <h4>🚀 Features:</h4>
+                            <ul class="feature-list">
+                                <li>AI Chat with Ollama</li>
+                                <li>Voice Recognition (STT)</li>
+                                <li>Text-to-Speech (TTS)</li>
+                                <li>MCP Integration</li>
+                                <li>Blender 3D Support</li>
+                                <li>Unity Engine Support</li>
+                                <li>Retro Mac OS UI</li>
+                            </ul>
+                        </div>
+                        <br>
+                        <div class="model-info">
+                            🎮 Game Developer<br>
+                            💼 SAP ABAP Developer<br>
+                            ☕ Java Developer<br>
+                            📱 Android Developer
+                        </div>
+                    </div>
+                `,
+                buttons: ['확인']
+            });
+        }
+
+        // Keyboard shortcuts info
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'F1') {
+                e.preventDefault();
+                Dec207Hub.showDialog({
+                    title: 'Keyboard Shortcuts',
+                    message: `
+                        <div style="text-align: left; font-family: monospace;">
+                            <h4>키보드 단축키</h4>
+                            <p><strong>Ctrl+N:</strong> 새 창</p>
+                            <p><strong>Ctrl+T:</strong> 테마 토글</p>
+                            <p><strong>Ctrl+L:</strong> 채팅 기록 삭제</p>
+                            <p><strong>Enter:</strong> 메시지 전송</p>
+                            <p><strong>F1:</strong> 단축키 도움말</p>
+                        </div>
+                    `,
+                    buttons: ['확인']
+                });
+            }
+        });
+
+        // Initialize demo messages after page load
+        window.addEventListener('load', () => {
+            // 메시지는 JavaScript에서 처리
+        });
+
+        // 엔터 키 문제 즉시 해결 스크립트
+        function fixEnterKeyIssue() {
+            const chatForm = document.querySelector('.dec207-chat-form');
+            if (chatForm) {
+                chatForm.removeAttribute('action');
+                chatForm.removeAttribute('method');
+                chatForm.removeAttribute('onsubmit');
+                console.log('✅ 엔터 키 리다이렉트 문제 해결됨!');
+            }
+        }
+        
+        // 페이지 로드 시 자동 수정
+        document.addEventListener('DOMContentLoaded', fixEnterKeyIssue);
+        
+        // 전역 함수로 등록 (콘솔에서 수동 실행 가능)
+        window.fixEnterKeyIssue = fixEnterKeyIssue;
+
+        // Console welcome message
+        console.log(`
+    ╔══════════════════════════════════════╗
+    ║           Dec207Hub Demo             ║
+    ║      Retro Mac AI Chat System       ║
+    ║                                      ║
+    ║  Created by dec207                   ║
+    ║  Version: 1.1.0 (Fixed Enter Key)   ║
+    ╚══════════════════════════════════════╝
+        `);
+        
+        console.log('✅ 엔터 키 리다이렉트 문제 해결: 수동 수정이 필요하면 fixEnterKeyIssue() 실행');
+    </script>
+</body>
+</html>
