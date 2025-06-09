@@ -14,6 +14,7 @@ import logging
 import re
 import hashlib
 from fastapi.responses import FileResponse
+from mcp_manager import get_mcp_tools, execute_mcp_tool
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -287,9 +288,12 @@ async def get_available_models():
         return {"error": f"모델 목록을 가져올 수 없습니다: {str(e)}", "models": [], "default": DEFAULT_MODEL}
 
 async def chat_with_ollama(message: str, model: str = DEFAULT_MODEL, conversation_history: List[Dict] = None) -> str:
-    """채팅 프론트엔드에서 코드 포매팅을 지원하도록 Ollama와 채팅"""
+    """채팅 프론트엔드에서 코드 포매팅을 지원하도록 Ollama와 채팅 + MCP Tool Calling"""
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
+            # MCP 도구 목록 가져오기
+            mcp_tools = await get_mcp_tools()
+            
             # 대화 컨텍스트 구성 - 중복 방지 및 최적화
             context_prompt = ""
             if conversation_history and len(conversation_history) > 0:
@@ -313,7 +317,17 @@ async def chat_with_ollama(message: str, model: str = DEFAULT_MODEL, conversatio
                         context_prompt += f"{role_display}: {content}\n"
                     context_prompt += "\n현재 질문에 집중하여 답변해주세요.\n\n"
             
-            # 개선된 한국어 프롬프트 - 대화 연속성 지원
+            # 도구 목록 설명 추가
+            tools_description = ""
+            if mcp_tools:
+                tools_description = "\n\n**사용 가능한 도구:**\n"
+                for tool in mcp_tools:
+                    tool_name = tool["function"]["name"]
+                    tool_desc = tool["function"]["description"]
+                    tools_description += f"- {tool_name}: {tool_desc}\n"
+                tools_description += "\n필요한 경우 위 도구들을 사용하여 작업을 수행할 수 있습니다.\n"
+            
+            # 개선된 한국어 프롬프트 - 대화 연속성 + MCP 도구 지원
             enhanced_prompt = f"""당신은 한국어 AI 어시스턴트입니다. 다음 규칙을 따라 답변해주세요:
 
 **답변 규칙:**
@@ -325,6 +339,14 @@ async def chat_with_ollama(message: str, model: str = DEFAULT_MODEL, conversatio
 6. 중요한 내용은 **굵은 글씨**로 강조
 7. 목록은 - 또는 1. 2. 3. 형식 사용
 8. 과도한 특수기호 (★☆■●○ 등) 사용 금지
+9. 필요시 제공된 도구를 사용하여 작업 수행
+
+**사실 확인 규칙:**
+10. 확실하지 않은 정보는 추측하지 않고 "정확한 정보를 모르겠습니다"라고 답변
+11. 존재하지 않는 기술이나 프로토콜을 만들어내지 않음
+12. MCP 관련 질문은 실제 Anthropic MCP 프로토콜 정보만 제공
+
+{tools_description}
 
 {context_prompt}현재 질문: {message}
 
@@ -332,27 +354,102 @@ AI 답변:"""
             
             payload = {
                 "model": model,
-                "prompt": enhanced_prompt,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": enhanced_prompt
+                    }
+                ],
+                "tools": mcp_tools,
                 "stream": False,
                 "options": {
-                    "temperature": 0.3,  # 더 일관된 답변
+                    "temperature": 0.1,  # 더 보수적이고 정확한 답변
                     "top_p": 0.9,
-                    "max_tokens": 2000,
-                    "repeat_penalty": 1.1
+                    "repeat_penalty": 1.3  # 반복 및 지어내기 방지 강화
                 }
             }
             
             logger.info(f"Ollama에 요청 전송: {message[:50]}...")
-            response = await client.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload)
+            response = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
             
             if response.status_code == 200:
                 data = response.json()
-                ai_response = data.get("response", "응답을 생성할 수 없습니다.").strip()
+                
+                # 디버깅: 전체 응답 구조 로깅
+                logger.info(f"🔍 Ollama 응답 구조: {json.dumps(data, indent=2, ensure_ascii=False)[:500]}...")
+                
+                # Tool calls 처리 - 다양한 위치에서 확인
+                tool_calls = []
+                
+                # 방법 1: 직접 tool_calls 필드
+                if "tool_calls" in data:
+                    tool_calls = data["tool_calls"]
+                    logger.info(f"🔧 방법1 - tool_calls 발견: {len(tool_calls)}개")
+                
+                # 방법 2: message 내부의 tool_calls
+                elif "message" in data and "tool_calls" in data["message"]:
+                    tool_calls = data["message"]["tool_calls"]
+                    logger.info(f"🔧 방법2 - message.tool_calls 발견: {len(tool_calls)}개")
+                
+                # 방법 3: messages 배열 내부 확인
+                elif "messages" in data:
+                    for msg in data["messages"]:
+                        if "tool_calls" in msg:
+                            tool_calls = msg["tool_calls"]
+                            logger.info(f"🔧 방법3 - messages[].tool_calls 발견: {len(tool_calls)}개")
+                            break
+                
+                logger.info(f"🔧 최종 Tool calls: {len(tool_calls)}개")
+                tool_results = []
+                
+                if tool_calls:
+                    logger.info(f"🔧 Tool calls 감지: {len(tool_calls)}개")
+                    
+                    for tool_call in tool_calls:
+                        try:
+                            function_info = tool_call.get("function", {})
+                            tool_name = function_info.get("name", "")
+                            tool_args = function_info.get("arguments", {})
+                            
+                            # JSON 문자열인 경우 파싱
+                            if isinstance(tool_args, str):
+                                tool_args = json.loads(tool_args)
+                            
+                            logger.info(f"🔧 도구 실행: {tool_name} - {tool_args}")
+                            
+                            # MCP 도구 실행
+                            tool_result = await execute_mcp_tool(tool_name, tool_args)
+                            tool_results.append({
+                                "tool_name": tool_name,
+                                "result": tool_result
+                            })
+                            
+                        except Exception as e:
+                            logger.error(f"❌ 도구 실행 오류 {tool_name}: {e}")
+                            tool_results.append({
+                                "tool_name": tool_name,
+                                "result": {"success": False, "error": str(e)}
+                            })
+                
+                # AI 응답 생성
+                ai_response = data.get("message", {}).get("content", "응답을 생성할 수 없습니다.").strip()
+                
+                # 도구 실행 결과를 응답에 추가
+                if tool_results:
+                    ai_response += "\n\n🔧 **도구 실행 결과:**\n"
+                    for tool_result in tool_results:
+                        tool_name = tool_result["tool_name"]
+                        result = tool_result["result"]
+                        
+                        if result.get("success", False):
+                            ai_response += f"\n✅ **{tool_name}**: {result.get('result', '실행 완료')}\n"
+                        else:
+                            ai_response += f"\n❌ **{tool_name}**: {result.get('error', '실행 실패')}\n"
                 
                 # 답변 후처리: 기본적인 정리
                 ai_response = clean_ai_response(ai_response)
                 
-                logger.info(f"Ollama 응답 받음: {ai_response[:50]}...")
+                logger.info(f"Ollama 응답 받음 (도구 {len(tool_results)}개 실행): {ai_response[:50]}...")
                 return ai_response
             else:
                 logger.error(f"Ollama API 오류: {response.status_code}")
