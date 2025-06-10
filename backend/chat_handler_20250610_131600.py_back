@@ -1,0 +1,306 @@
+# Dec207Hub Backend Chat Handler
+# Qwen2.5-Coder-7B + 강화된 할루시네이션 방지
+
+import json
+import httpx
+import logging
+import re
+from datetime import datetime
+from typing import List, Dict, Any, Optional
+from config import (
+    OLLAMA_BASE_URL, DEFAULT_MODEL, FALLBACK_MODEL, HTTP_TIMEOUT, 
+    MAX_CONVERSATION_HISTORY, MAX_CONTEXT_MESSAGES, MAX_MESSAGE_LENGTH,
+    AI_TEMPERATURE, AI_TOP_P, AI_REPEAT_PENALTY, AI_MAX_NEW_TOKENS,
+    ENABLE_MCP, ENABLE_FUNCTION_CALLING, ENABLE_FACT_CHECK, 
+    FAST_RESPONSE_MODE, RESPONSE_TIMEOUT
+)
+
+logger = logging.getLogger(__name__)
+
+async def chat_with_ollama(message: str, model: str = DEFAULT_MODEL, 
+                          conversation_history: List[Dict] = None,
+                          enable_tools: bool = True) -> str:
+    """Qwen2.5-Coder-7B 채팅 + 강화된 할루시네이션 방지"""
+    try:
+        timeout = RESPONSE_TIMEOUT if FAST_RESPONSE_MODE else HTTP_TIMEOUT
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            # 컨텍스트 구성
+            context_prompt = build_safe_context_prompt(conversation_history)
+            
+            # 할루시네이션 방지 강화 프롬프트
+            enhanced_prompt = build_anti_hallucination_prompt(context_prompt, message)
+            
+            # 안전한 응답용 페이로드
+            payload = build_safe_payload(model, enhanced_prompt)
+            
+            logger.info(f"Qwen2.5-Coder-7B 안전 요청: {message[:30]}...")
+            response = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # 응답 추출 및 검증
+                ai_response = extract_and_validate_response(data, message)
+                
+                logger.info(f"Qwen2.5-Coder-7B 검증 완료: {ai_response[:50]}...")
+                return ai_response
+            else:
+                logger.error(f"Ollama API 오류: {response.status_code}")
+                return await fallback_chat(message, conversation_history)
+                
+    except httpx.TimeoutException:
+        logger.warning("Qwen2.5-Coder-7B 응답 시간 초과 - 백업 모델 사용")
+        return await fallback_chat(message, conversation_history)
+    except Exception as e:
+        logger.error(f"Qwen2.5-Coder-7B 오류: {str(e)}")
+        return "AI 연결 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+
+def build_safe_context_prompt(conversation_history: List[Dict]) -> str:
+    """안전한 컨텍스트 프롬프트 구성"""
+    if not conversation_history:
+        return ""
+    
+    # 최근 대화만 간단히 포함
+    recent_history = conversation_history[-3:]
+    context_lines = []
+    
+    for msg in recent_history:
+        role = "사용자" if msg.get('role') == 'user' else "AI"
+        content = msg.get('content', '')[:200]
+        context_lines.append(f"{role}: {content}")
+    
+    return "이전 대화:\n" + "\n".join(context_lines) + "\n\n" if context_lines else ""
+
+def build_anti_hallucination_prompt(context_prompt: str, message: str) -> str:
+    """할루시네이션 방지 강화 프롬프트"""
+    
+    # ABAP 관련 체크
+    abap_keywords = ['abap', 'sap', 'select', 'data:', 'form', 'function']
+    is_abap_related = any(keyword in message.lower() for keyword in abap_keywords)
+    
+    # SAP 일반 정보 질문과 ABAP 코딩 질문 구분
+    is_abap_coding = any(word in message.lower() for word in ['코드', '프로그램', '작성', 'select', 'data:', 'function'])
+    is_sap_info = 'sap' in message.lower() and any(word in message.lower() for word in ['본사', '위치', '회사', '설립', '역사'])
+    
+    if is_sap_info and not is_abap_coding:
+        return f"""당신은 정확한 정보만 제공하는 AI 어시스턴트입니다. SAP 회사 정보에 대한 질문입니다.
+
+**SAP 정보 답변 규칙:**
+• 확실한 SAP 회사 정보만 제공
+• 불필요한 ABAP 코드 예시 금지
+• 간결하고 정확한 답변
+• 공식 정보임을 명시
+
+{context_prompt}질문: {message}
+
+정확한 회사 정보 답변:"""
+    elif is_abap_related and is_abap_coding:
+        return f"""당신은 SAP ABAP 전문가입니다. 정확하고 검증된 답변만 제공하세요.
+
+**엄격한 ABAP 답변 규칙:**
+• 확실한 ABAP 문법만 사용
+• 존재하지 않는 함수/테이블 절대 금지
+• 불확실하면 "확실하지 않습니다" 명시
+• 실제 검증 가능한 코드만 제공
+
+{context_prompt}질문: {message}
+
+정확한 ABAP 답변:"""
+    else:
+        return f"""당신은 정확성을 최우선으로 하는 AI 어시스턴트입니다.
+
+**할루시네이션 방지 규칙:**
+1. **절대 추측하지 마세요** - 확실하지 않으면 "잘 모르겠습니다"
+2. **존재하지 않는 정보 금지** - 기술, 제품, 회사, 사람을 만들어내지 마세요
+3. **사실과 의견 구분** - 사실은 확실할 때만, 의견은 명시적으로 구분
+4. **최신 정보 주의** - 2025년 이후 정보는 "확인이 어렵다" 명시
+5. **유사한 용어 혼동 금지** - 정확한 키워드 이해 필수
+6. **불필요한 코드 예시 금지** - 질문과 관련없는 코드 작성 금지
+
+**허용되는 답변:**
+- 일반 상식과 확실한 지식
+- 학습 도움 (수학, 과학, 언어)
+- 프로그래밍 기초 지식 (요청시에만)
+- 창작 (소설, 시 등 - 창작임을 명시)
+
+{context_prompt}질문: {message}
+
+정확하고 솔직한 답변:"""
+
+def build_safe_payload(model: str, prompt: str) -> Dict[str, Any]:
+    """안전한 응답용 페이로드"""
+    return {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+        "options": {
+            "temperature": 0.05,  # 더 낮춰서 일관성 확보
+            "top_p": 0.8,         # 토큰 선택 범위 축소
+            "repeat_penalty": 1.2,
+            "num_predict": AI_MAX_NEW_TOKENS,
+            "num_ctx": 4096,
+        }
+    }
+
+def extract_and_validate_response(data: Dict[str, Any], original_message: str) -> str:
+    """응답 추출 및 강화된 검증"""
+    ai_response = data.get("message", {}).get("content", "응답을 생성할 수 없습니다.").strip()
+    
+    # 기본 정리
+    ai_response = re.sub(r'\n{3,}', '\n\n', ai_response)
+    ai_response = ai_response.strip()
+    
+    # 할루시네이션 검증
+    ai_response = detect_and_flag_hallucinations(ai_response, original_message)
+    
+    # 특정 키워드 혼동 검증  
+    ai_response = check_keyword_confusion(ai_response, original_message)
+    
+    # 새로 추가: 사실 검증
+    ai_response = verify_factual_claims(ai_response, original_message)
+    
+    return ai_response
+
+def detect_and_flag_hallucinations(response: str, question: str) -> str:
+    """할루시네이션 패턴 감지 및 경고"""
+    
+    # 위험한 할루시네이션 패턴들
+    dangerous_patterns = [
+        (r'새로운?\s*(기술|제품|서비스).*출시', '최신 제품/기술 정보'),
+        (r'최근에?\s*(발표|공개|출시)', '최근 발표 정보'),
+        (r'2025년.*이후', '미래 정보'),
+        (r'공식.*발표.*했습니다', '공식 발표 정보'),
+        (r'확실한?\s*정보.*있습니다', '확실성 과장'),
+        (r'연구.*결과.*보여', '연구 결과 인용'),
+        (r'전문가.*말했습니다', '전문가 인용'),
+    ]
+    
+    found_issues = []
+    for pattern, issue_type in dangerous_patterns:
+        if re.search(pattern, response, re.IGNORECASE):
+            found_issues.append(issue_type)
+    
+    if found_issues:
+        warning = f"⚠️ **정확성 경고**: 이 답변에는 불확실한 정보({', '.join(found_issues)})가 포함될 수 있습니다.\n\n"
+        response = warning + response + "\n\n💡 **권장**: 중요한 정보는 공식 소스에서 재확인해주세요."
+    
+    return response
+
+def check_keyword_confusion(response: str, question: str) -> str:
+    """특정 키워드 혼동 검사"""
+    
+    # 자주 혼동되는 키워드 매핑
+    confusion_checks = [
+        # 시바이누 vs Siamese 혼동 검사
+        {
+            'keywords': ['시바이누', '시바 이누', 'shiba', 'shiba inu'],
+            'wrong_content': ['siamese', 'network', '신경망', '딥러닝', 'tensorflow'],
+            'correct_topic': '일본 개 품종',
+            'wrong_topic': 'AI/딥러닝'
+        },
+        # 다른 혼동 패턴들 추가 가능
+    ]
+    
+    question_lower = question.lower()
+    response_lower = response.lower()
+    
+    for check in confusion_checks:
+        # 질문에 특정 키워드가 있는지 확인
+        if any(keyword in question_lower for keyword in check['keywords']):
+            # 답변에 잘못된 내용이 있는지 확인
+            if any(wrong in response_lower for wrong in check['wrong_content']):
+                correction = f"🚨 **키워드 혼동 감지**: 질문은 '{check['correct_topic']}'에 관한 것 같은데, 답변이 '{check['wrong_topic']}'에 대한 내용을 포함하고 있습니다.\n\n"
+                return correction + "정확한 답변을 위해 질문을 다시 확인하겠습니다. 혹시 일본의 개 품종인 시바이누에 대해 묻는 것이 맞나요?"
+    
+    return response
+
+def verify_factual_claims(response: str, question: str) -> str:
+    """사실 주장 검증"""
+    
+    # 알려진 사실들 데이터베이스
+    known_facts = {
+        'sap': {
+            '본사': '독일 발도르프(Walldorf)',
+            '설립': '1972년',
+            '설립자': 'Dietmar Hopp, Hasso Plattner 등 5명'
+        },
+        'microsoft': {
+            '본사': '미국 레드몬드(Redmond)'
+        },
+        'google': {
+            '본사': '미국 마운틴뷰(Mountain View)'
+        }
+    }
+    
+    question_lower = question.lower()
+    response_lower = response.lower()
+    
+    # SAP 본사 위치 검증
+    if 'sap' in question_lower and ('본사' in question or '위치' in question):
+        wrong_locations = ['wuppertal', '부퍼탈', '빠르나크', '바르멘', 'barmen']
+        if any(wrong_loc in response_lower for wrong_loc in wrong_locations):
+            return f"❌ **사실 오류 감지**: SAP 본사는 독일 발도르프(Walldorf)입니다.\n\n제가 잘못된 정보를 제공했습니다. 정확한 정보는 SAP 공식 웹사이트에서 확인해주세요."
+    
+    # 다른 회사 본사 검증도 추가 가능
+    
+    return response
+
+async def fallback_chat(message: str, conversation_history: List[Dict] = None) -> str:
+    """백업 모델로 안전한 전환"""
+    try:
+        logger.info(f"백업 모델 {FALLBACK_MODEL} 사용")
+        
+        # 백업 모델용 안전한 프롬프트
+        safe_prompt = f"""정확한 정보만 제공하세요. 확실하지 않으면 "잘 모르겠습니다"라고 답변하세요.
+
+질문: {message}
+
+답변:"""
+        
+        payload = {
+            "model": FALLBACK_MODEL,
+            "messages": [{"role": "user", "content": safe_prompt}],
+            "stream": False,
+            "options": {
+                "temperature": 0.05,  # 매우 낮은 temperature
+                "num_predict": 512,
+            }
+        }
+        
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("message", {}).get("content", "백업 응답 실패").strip()
+            
+    except Exception as e:
+        logger.error(f"백업 모델 실패: {str(e)}")
+    
+    return "죄송합니다. 현재 AI 서비스에 문제가 있습니다. 잠시 후 다시 시도해주세요."
+
+# 유틸리티 함수들
+def get_model_status() -> Dict[str, Any]:
+    """모델 상태 정보"""
+    return {
+        "primary_model": DEFAULT_MODEL,
+        "fallback_model": FALLBACK_MODEL,
+        "anti_hallucination": True,
+        "keyword_confusion_check": True,
+        "fact_check": ENABLE_FACT_CHECK
+    }
+
+# 일반적인 혼동 사례들을 위한 도움말
+def get_common_confusions() -> List[str]:
+    """자주 혼동되는 키워드들"""
+    return [
+        "시바이누(개) vs Siamese Network(AI)",
+        "Java(언어) vs 자바(커피)",
+        "Python(언어) vs 파이썬(뱀)",
+        "Oracle(회사/DB) vs 오라클(예언)"
+    ]
+
+logger.info("🛡️ Qwen2.5-Coder-7B 할루시네이션 방지 Chat Handler 로드 완료")
+logger.info(f"🚀 메인 모델: {DEFAULT_MODEL}")
+logger.info(f"🔧 백업 모델: {FALLBACK_MODEL}")
+logger.info("🛡️ 할루시네이션 방지 시스템 활성화")
+logger.info("🔍 키워드 혼동 검사 활성화")

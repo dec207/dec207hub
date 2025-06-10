@@ -1,0 +1,32 @@
+# Dec207Hub Backend Configuration
+# 설정 상수 및 환경변수
+
+import os
+
+# Ollama 설정
+OLLAMA_BASE_URL = "http://localhost:11434"
+DEFAULT_MODEL = "llama3.1:8b"  # 설치된 모델에 맞춤
+
+# 서버 설정
+SERVER_HOST = "0.0.0.0"
+SERVER_PORT = 8000
+
+# 로그 설정
+LOG_LEVEL = "INFO"
+CHAT_LOG_DIR = "chat_logs"
+
+# WebSocket 설정
+WEBSOCKET_TIMEOUT = 60.0
+
+# HTTP 클라이언트 설정
+HTTP_TIMEOUT = 60.0
+
+# 대화 히스토리 설정
+MAX_CONVERSATION_HISTORY = 8
+MAX_CONTEXT_MESSAGES = 4
+MAX_MESSAGE_LENGTH = 200
+
+# AI 응답 설정
+AI_TEMPERATURE = 0.1
+AI_TOP_P = 0.9
+AI_REPEAT_PENALTY = 1.3

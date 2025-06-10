@@ -1,0 +1,237 @@
+# Dec207Hub Backend Chat Handler
+# Ollama와의 채팅 처리 및 MCP 도구 연동
+
+import json
+import httpx
+import logging
+import re
+from datetime import datetime
+from typing import List, Dict, Any
+from config import (
+    OLLAMA_BASE_URL, DEFAULT_MODEL, HTTP_TIMEOUT, MAX_CONVERSATION_HISTORY,
+    MAX_CONTEXT_MESSAGES, MAX_MESSAGE_LENGTH, AI_TEMPERATURE, AI_TOP_P, AI_REPEAT_PENALTY
+)
+from mcp_manager import get_mcp_tools, execute_mcp_tool
+
+logger = logging.getLogger(__name__)
+
+async def chat_with_ollama(message: str, model: str = DEFAULT_MODEL, 
+                          conversation_history: List[Dict] = None) -> str:
+    """채팅 프론트엔드에서 코드 포매팅을 지원하도록 Ollama와 채팅 + MCP Tool Calling"""
+    try:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+            # MCP 도구 목록 가져오기
+            mcp_tools = await get_mcp_tools()
+            
+            # 대화 컨텍스트 구성 - 중복 방지 및 최적화
+            context_prompt = build_context_prompt(conversation_history)
+            
+            # 도구 목록 설명 추가
+            tools_description = build_tools_description(mcp_tools)
+            
+            # 개선된 한국어 프롬프트 - 대화 연속성 + MCP 도구 지원
+            enhanced_prompt = build_enhanced_prompt(context_prompt, tools_description, message)
+            
+            payload = {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": enhanced_prompt
+                    }
+                ],
+                "tools": mcp_tools,
+                "stream": False,
+                "options": {
+                    "temperature": AI_TEMPERATURE,
+                    "top_p": AI_TOP_P,
+                    "repeat_penalty": AI_REPEAT_PENALTY
+                }
+            }
+            
+            logger.info(f"Ollama에 요청 전송: {message[:50]}...")
+            response = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # 디버깅: 전체 응답 구조 로깅
+                logger.info(f"🔍 Ollama 응답 구조: {json.dumps(data, indent=2, ensure_ascii=False)[:500]}...")
+                
+                # Tool calls 처리
+                tool_results = await process_tool_calls(data)
+                
+                # AI 응답 생성
+                ai_response = data.get("message", {}).get("content", "응답을 생성할 수 없습니다.").strip()
+                
+                # 도구 실행 결과를 응답에 추가
+                if tool_results:
+                    ai_response += build_tool_results_text(tool_results)
+                
+                # 답변 후처리: 기본적인 정리
+                ai_response = clean_ai_response(ai_response)
+                
+                logger.info(f"Ollama 응답 받음 (도구 {len(tool_results)}개 실행): {ai_response[:50]}...")
+                return ai_response
+            else:
+                logger.error(f"Ollama API 오류: {response.status_code}")
+                return f"AI 서버 오류가 발생했습니다. (상태 코드: {response.status_code})"
+                
+    except httpx.TimeoutException:
+        logger.error("Ollama 응답 시간 초과")
+        return "AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요."
+    except Exception as e:
+        logger.error(f"Ollama 통신 오류: {str(e)}")
+        return f"AI 서버 연결 오류: {str(e)}"
+
+def build_context_prompt(conversation_history: List[Dict]) -> str:
+    """대화 컨텍스트 프롬프트 구성"""
+    context_prompt = ""
+    if conversation_history and len(conversation_history) > 0:
+        # 중복 메시지 제거 및 최근 4개 메시지만 사용 (성능 최적화)
+        unique_history = []
+        seen_messages = set()
+        
+        for msg in reversed(conversation_history[-MAX_CONVERSATION_HISTORY:]):
+            msg_content = msg.get('content', '').strip()
+            if msg_content and msg_content not in seen_messages:
+                unique_history.append(msg)
+                seen_messages.add(msg_content)
+                if len(unique_history) >= MAX_CONTEXT_MESSAGES:
+                    break
+        
+        if unique_history:
+            context_prompt = "이전 대화:\n"
+            for msg in reversed(unique_history):  # 시간순으로 정렬
+                role_display = "사용자" if msg.get('role') == 'user' else "AI"
+                content = msg.get('content', '')[:MAX_MESSAGE_LENGTH]  # 내용 길이 제한
+                context_prompt += f"{role_display}: {content}\n"
+            context_prompt += "\n현재 질문에 집중하여 답변해주세요.\n\n"
+    
+    return context_prompt
+
+def build_tools_description(mcp_tools: List[Dict]) -> str:
+    """도구 목록 설명 구성"""
+    tools_description = ""
+    if mcp_tools:
+        tools_description = "\n\n**사용 가능한 도구:**\n"
+        for tool in mcp_tools:
+            tool_name = tool["function"]["name"]
+            tool_desc = tool["function"]["description"]
+            tools_description += f"- {tool_name}: {tool_desc}\n"
+        tools_description += "\n필요한 경우 위 도구들을 사용하여 작업을 수행할 수 있습니다.\n"
+    
+    return tools_description
+
+def build_enhanced_prompt(context_prompt: str, tools_description: str, message: str) -> str:
+    """강화된 프롬프트 구성"""
+    return f"""당신은 한국어 AI 어시스턴트입니다. 다음 규칙을 따라 답변해주세요:
+
+**답변 규칙:**
+1. 반드시 한국어로만 답변
+2. 정중한 언어 사용
+3. 명확하고 도움이 되는 답변
+4. 이전 대화 내용을 참고하여 자연스럽게 답변
+5. 코드는 ```로 감싸서 작성
+6. 중요한 내용은 **굵은 글씨**로 강조
+7. 목록은 - 또는 1. 2. 3. 형식 사용
+8. 과도한 특수기호 (★☆■●○ 등) 사용 금지
+**도구 사용 규칙:**
+9. 도구는 사용자가 명확히 요청한 경우에만 사용
+10. 단순한 인사말(안녕, 안녕하세요, 하이, hello 등)에는 도구를 사용하지 않음
+11. 일반적인 질문이나 대화에는 도구를 사용하지 않음
+12. 사용자가 "블렌더에서", "유니티에서", "서버 상태" 등 구체적으로 도구 사용을 요청할 때만 사용
+
+**사실 확인 규칙:**
+13. 확실하지 않은 정보는 추측하지 않고 "정확한 정보를 모르겠습니다"라고 답변
+14. 존재하지 않는 기술이나 프로토콜을 만들어내지 않음
+15. MCP 관련 질문은 실제 Anthropic MCP 프로토콜 정보만 제공
+
+{tools_description}
+
+{context_prompt}현재 질문: {message}
+
+AI 답변:"""
+
+async def process_tool_calls(data: Dict) -> List[Dict]:
+    """Tool calls 처리"""
+    tool_calls = []
+    
+    # 방법 1: 직접 tool_calls 필드
+    if "tool_calls" in data:
+        tool_calls = data["tool_calls"]
+        logger.info(f"🔧 방법1 - tool_calls 발견: {len(tool_calls)}개")
+    
+    # 방법 2: message 내부의 tool_calls
+    elif "message" in data and "tool_calls" in data["message"]:
+        tool_calls = data["message"]["tool_calls"]
+        logger.info(f"🔧 방법2 - message.tool_calls 발견: {len(tool_calls)}개")
+    
+    # 방법 3: messages 배열 내부 확인
+    elif "messages" in data:
+        for msg in data["messages"]:
+            if "tool_calls" in msg:
+                tool_calls = msg["tool_calls"]
+                logger.info(f"🔧 방법3 - messages[].tool_calls 발견: {len(tool_calls)}개")
+                break
+    
+    logger.info(f"🔧 최종 Tool calls: {len(tool_calls)}개")
+    tool_results = []
+    
+    if tool_calls:
+        logger.info(f"🔧 Tool calls 감지: {len(tool_calls)}개")
+        
+        for tool_call in tool_calls:
+            try:
+                function_info = tool_call.get("function", {})
+                tool_name = function_info.get("name", "")
+                tool_args = function_info.get("arguments", {})
+                
+                # JSON 문자열인 경우 파싱
+                if isinstance(tool_args, str):
+                    tool_args = json.loads(tool_args)
+                
+                logger.info(f"🔧 도구 실행: {tool_name} - {tool_args}")
+                
+                # MCP 도구 실행
+                tool_result = await execute_mcp_tool(tool_name, tool_args)
+                tool_results.append({
+                    "tool_name": tool_name,
+                    "result": tool_result
+                })
+                
+            except Exception as e:
+                logger.error(f"❌ 도구 실행 오류 {tool_name}: {e}")
+                tool_results.append({
+                    "tool_name": tool_name,
+                    "result": {"success": False, "error": str(e)}
+                })
+    
+    return tool_results
+
+def build_tool_results_text(tool_results: List[Dict]) -> str:
+    """도구 실행 결과 텍스트 구성"""
+    result_text = "\n\n🔧 **도구 실행 결과:**\n"
+    for tool_result in tool_results:
+        tool_name = tool_result["tool_name"]
+        result = tool_result["result"]
+        
+        if result.get("success", False):
+            result_text += f"\n✅ **{tool_name}**: {result.get('result', '실행 완료')}\n"
+        else:
+            result_text += f"\n❌ **{tool_name}**: {result.get('error', '실행 실패')}\n"
+    
+    return result_text
+
+def clean_ai_response(response: str) -> str:
+    """기본적인 AI 응답 정리"""
+    # 과도한 줄바꿈 제거
+    response = response.replace('\n\n\n\n', '\n\n')
+    
+    # 시작/끝 공백 제거
+    response = response.strip()
+    
+    # 과도한 특수기호 제거
+    response = re.sub(r'[\u2605\u2606\u25a0\u25cf\u25cb\u2661\u2665\u2668\u266a\u266b]{2,}', '', response)
+    
+    return response

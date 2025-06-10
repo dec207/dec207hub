@@ -389,12 +389,13 @@ body {
 }
 
 .dec207-message.system {
-    background: var(--macos-orange);
-    color: var(--macos-white);
+    background: var(--macos-light-gray);
+    color: var(--macos-charcoal);
     text-align: center;
     margin: 0 auto;
     font-size: var(--font-size-sm);
     border-radius: 12px;
+    display: none; /* 시스템 메시지 완전히 숨김 */
 }
 
 .dec207-typing-indicator {

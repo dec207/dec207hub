@@ -1,0 +1,65 @@
+# Dec207Hub Backend Configuration
+# Qwen2.5-Coder-14B + RTX 3070 최적화 설정
+
+import os
+
+# ===== Ollama 설정 =====
+OLLAMA_BASE_URL = "http://localhost:11434"
+DEFAULT_MODEL = "qwen2.5-coder:14b"  # SAP ABAP 최적화 모델
+FALLBACK_MODEL = "qwen2.5-coder:7b"  # 메모리 부족시 백업
+
+# ===== 서버 설정 =====
+SERVER_HOST = "0.0.0.0"
+SERVER_PORT = 8000
+
+# ===== RTX 3070 GPU 최적화 =====
+GPU_MEMORY_LIMIT = 7.8  # GB, 8GB 중 안전 범위
+ENABLE_GPU_MONITORING = True
+GPU_MEMORY_THRESHOLD = 7.5  # GB, 경고 임계값
+
+# ===== MCP & Function Calling 활성화 =====
+ENABLE_MCP = True
+ENABLE_FUNCTION_CALLING = True
+MCP_TIMEOUT = 30.0
+
+# ===== SAP ABAP 개발 최적화 파라미터 =====
+AI_TEMPERATURE = 0.05       # 정확한 문법을 위해 낮춤
+AI_TOP_P = 0.9              # 토큰 선택 범위
+AI_REPEAT_PENALTY = 1.1     # 자연스러운 반복 방지
+AI_MAX_NEW_TOKENS = 2048    # 14B 모델 최대 활용
+
+# ===== 컨텍스트 설정 (14B 모델 강화) =====
+MAX_CONVERSATION_HISTORY = 15  # 대화 히스토리 증가
+MAX_CONTEXT_MESSAGES = 8       # 컨텍스트 메시지 증가  
+MAX_MESSAGE_LENGTH = 1000      # 메시지 길이 확장
+CONTEXT_WINDOW = 128000        # 128K 컨텍스트 활용
+
+# ===== 로그 설정 =====
+LOG_LEVEL = "INFO"
+CHAT_LOG_DIR = "chat_logs"
+
+# ===== 네트워크 설정 =====
+WEBSOCKET_TIMEOUT = 60.0
+HTTP_TIMEOUT = 45.0
+
+# ===== 성능 최적화 =====
+BATCH_SIZE = 1              # RTX 3070 안정성
+CACHE_SIZE_MB = 1024        # 캐시 크기 증가
+ENABLE_MODEL_CACHE = True   # 모델 캐싱 활성화
+
+# ===== ABAP 특화 설정 =====
+ABAP_SYNTAX_CHECK = True    # ABAP 문법 검사 활성화
+ABAP_BEST_PRACTICES = True  # ABAP 베스트 프랙티스 가이드
+SAP_VERSION_SUPPORT = ["ECC", "S4HANA", "BTP"]  # 지원 SAP 버전
+
+# ===== 할루시네이션 방지 설정 =====
+ENABLE_FACT_CHECK = True    # 사실 확인 활성화
+UNCERTAINTY_THRESHOLD = 0.3 # 불확실성 임계값
+SAFETY_MODE = "strict"      # 엄격한 안전 모드
+
+print("🎯 Qwen2.5-Coder-14B + RTX 3070 최적화 설정 로드됨")
+print(f"🤖 메인 모델: {DEFAULT_MODEL}")
+print(f"🔧 백업 모델: {FALLBACK_MODEL}")
+print(f"💾 GPU 메모리 한계: {GPU_MEMORY_LIMIT}GB")
+print(f"🛠️ MCP 기능: {'활성화' if ENABLE_MCP else '비활성화'}")
+print(f"📊 Function Calling: {'활성화' if ENABLE_FUNCTION_CALLING else '비활성화'}")

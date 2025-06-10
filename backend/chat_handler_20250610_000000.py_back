@@ -1,0 +1,201 @@
+# Dec207Hub Backend Chat Handler
+# Qwen2.5-Coder-7B 고속 최적화 + ABAP 특화
+
+import json
+import httpx
+import logging
+import re
+from datetime import datetime
+from typing import List, Dict, Any, Optional
+from config import (
+    OLLAMA_BASE_URL, DEFAULT_MODEL, FALLBACK_MODEL, HTTP_TIMEOUT, 
+    MAX_CONVERSATION_HISTORY, MAX_CONTEXT_MESSAGES, MAX_MESSAGE_LENGTH,
+    AI_TEMPERATURE, AI_TOP_P, AI_REPEAT_PENALTY, AI_MAX_NEW_TOKENS,
+    ENABLE_MCP, ENABLE_FUNCTION_CALLING, ENABLE_FACT_CHECK, 
+    FAST_RESPONSE_MODE, RESPONSE_TIMEOUT
+)
+
+logger = logging.getLogger(__name__)
+
+async def chat_with_ollama(message: str, model: str = DEFAULT_MODEL, 
+                          conversation_history: List[Dict] = None,
+                          enable_tools: bool = True) -> str:
+    """Qwen2.5-Coder-7B 고속 채팅 - 빠른 응답과 ABAP 최적화"""
+    try:
+        timeout = RESPONSE_TIMEOUT if FAST_RESPONSE_MODE else HTTP_TIMEOUT
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            # 간소화된 컨텍스트 구성 (속도 향상)
+            context_prompt = build_fast_context_prompt(conversation_history)
+            
+            # ABAP 특화 고속 프롬프트
+            enhanced_prompt = build_fast_abap_prompt(context_prompt, message)
+            
+            # 고속 응답용 페이로드
+            payload = build_fast_payload(model, enhanced_prompt)
+            
+            logger.info(f"Qwen2.5-Coder-7B 고속 요청: {message[:30]}...")
+            response = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # 빠른 응답 처리
+                ai_response = extract_fast_response(data)
+                
+                # 간단한 검증 (속도 우선)
+                if ENABLE_FACT_CHECK:
+                    ai_response = quick_validate_response(ai_response)
+                
+                logger.info(f"Qwen2.5-Coder-7B 응답 완료 ({len(ai_response)} chars)")
+                return ai_response
+            else:
+                logger.error(f"Ollama API 오류: {response.status_code}")
+                return await fallback_chat(message, conversation_history)
+                
+    except httpx.TimeoutException:
+        logger.warning("Qwen2.5-Coder-7B 응답 시간 초과 - 백업 모델 사용")
+        return await fallback_chat(message, conversation_history)
+    except Exception as e:
+        logger.error(f"Qwen2.5-Coder-7B 오류: {str(e)}")
+        return f"AI 연결 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+
+def build_fast_context_prompt(conversation_history: List[Dict]) -> str:
+    """고속 컨텍스트 프롬프트 - 간소화"""
+    if not conversation_history:
+        return ""
+    
+    # 최근 대화만 간단히 포함
+    recent_history = conversation_history[-3:]  # 최근 3개만
+    context_lines = []
+    
+    for msg in recent_history:
+        role = "사용자" if msg.get('role') == 'user' else "AI"
+        content = msg.get('content', '')[:200]  # 길이 제한
+        context_lines.append(f"{role}: {content}")
+    
+    return "이전 대화:\n" + "\n".join(context_lines) + "\n\n" if context_lines else ""
+
+def build_fast_abap_prompt(context_prompt: str, message: str) -> str:
+    """ABAP 고속 최적화 프롬프트 - 간결하고 효과적"""
+    
+    # ABAP 관련 키워드 빠른 체크
+    abap_keywords = ['abap', 'sap', 'select', 'data:', 'form', 'function']
+    is_abap_related = any(keyword in message.lower() for keyword in abap_keywords)
+    
+    if is_abap_related:
+        return f"""당신은 SAP ABAP 전문가입니다. 빠르고 정확한 답변을 제공하세요.
+
+**ABAP 답변 규칙:**
+• 정확한 ABAP 문법 사용
+• 실행 가능한 코드 제공
+• 간단명료한 설명
+• 주석 포함
+
+{context_prompt}질문: {message}
+
+답변:"""
+    else:
+        return f"""당신은 Qwen2.5-Coder-7B 기반 AI 어시스턴트입니다. 빠르고 도움이 되는 답변을 제공하세요.
+
+**답변 규칙:**
+• 명확하고 정확한 정보
+• 코드는 주석과 함께
+• 불확실한 정보는 명시
+• 한국어 사용
+
+{context_prompt}질문: {message}
+
+답변:"""
+
+def build_fast_payload(model: str, prompt: str) -> Dict[str, Any]:
+    """고속 응답용 최적화 페이로드"""
+    return {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+        "options": {
+            "temperature": AI_TEMPERATURE,
+            "top_p": AI_TOP_P,
+            "repeat_penalty": AI_REPEAT_PENALTY,
+            "num_predict": AI_MAX_NEW_TOKENS,
+            "num_ctx": 4096,  # 7B 모델 최적 컨텍스트
+            "num_thread": 8,  # 병렬 처리
+        }
+    }
+
+def extract_fast_response(data: Dict[str, Any]) -> str:
+    """빠른 응답 추출 및 기본 정리"""
+    ai_response = data.get("message", {}).get("content", "응답을 생성할 수 없습니다.").strip()
+    
+    # 기본 정리만 수행 (속도 우선)
+    ai_response = re.sub(r'\n{3,}', '\n\n', ai_response)  # 과도한 줄바꿈 제거
+    ai_response = ai_response.strip()
+    
+    return ai_response
+
+def quick_validate_response(response: str) -> str:
+    """빠른 응답 검증 - 핵심만"""
+    # 의심스러운 패턴 간단 체크
+    if re.search(r'새로운?\s*(기술|제품).*출시|최근.*발표', response, re.IGNORECASE):
+        response += "\n\n💡 참고: 최신 정보는 공식 소스에서 확인해주세요."
+    
+    return response
+
+async def fallback_chat(message: str, conversation_history: List[Dict] = None) -> str:
+    """백업 모델로 빠른 전환"""
+    try:
+        logger.info(f"백업 모델 {FALLBACK_MODEL} 사용")
+        
+        # 백업 모델용 간단한 프롬프트
+        simple_prompt = f"질문: {message}\n\n답변:"
+        
+        payload = {
+            "model": FALLBACK_MODEL,
+            "messages": [{"role": "user", "content": simple_prompt}],
+            "stream": False,
+            "options": {
+                "temperature": 0.1,
+                "num_predict": 512,  # 백업 모델은 짧게
+            }
+        }
+        
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("message", {}).get("content", "백업 응답 실패").strip()
+            
+    except Exception as e:
+        logger.error(f"백업 모델 실패: {str(e)}")
+    
+    return "죄송합니다. 현재 AI 서비스에 문제가 있습니다. 잠시 후 다시 시도해주세요."
+
+# 유틸리티 함수들
+def is_abap_question(message: str) -> bool:
+    """ABAP 질문 빠른 판단"""
+    return any(word in message.lower() for word in ['abap', 'sap', 'select', 'data:'])
+
+def get_model_status() -> Dict[str, Any]:
+    """모델 상태 정보"""
+    return {
+        "primary_model": DEFAULT_MODEL,
+        "fallback_model": FALLBACK_MODEL,
+        "fast_mode": FAST_RESPONSE_MODE,
+        "response_timeout": RESPONSE_TIMEOUT,
+        "max_tokens": AI_MAX_NEW_TOKENS
+    }
+
+# 빠른 ABAP 도움말 
+def get_abap_quick_help() -> str:
+    """ABAP 빠른 도움말"""
+    return """
+🚀 ABAP 빠른 도움말:
+• DATA: 변수선언 | SELECT: 데이터조회 | LOOP: 반복문
+• FORM/ENDFORM: 서브루틴 | FUNCTION: 함수모듈
+• IF/ENDIF: 조건문 | CASE/ENDCASE: 분기문
+"""
+
+logger.info("⚡ Qwen2.5-Coder-7B 고속 Chat Handler 로드 완료")
+logger.info(f"🚀 메인 모델: {DEFAULT_MODEL} (고속 모드)")
+logger.info(f"🔧 백업 모델: {FALLBACK_MODEL}")
+logger.info(f"⏱️ 응답 시간 제한: {RESPONSE_TIMEOUT}초")

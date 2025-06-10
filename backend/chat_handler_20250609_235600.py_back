@@ -1,0 +1,130 @@
+# Dec207Hub Backend Chat Handler
+# Ollama와의 단순 채팅 처리 (MCP 기능 비활성화)
+
+import json
+import httpx
+import logging
+import re
+from datetime import datetime
+from typing import List, Dict, Any
+from config import (
+    OLLAMA_BASE_URL, DEFAULT_MODEL, HTTP_TIMEOUT, MAX_CONVERSATION_HISTORY,
+    MAX_CONTEXT_MESSAGES, MAX_MESSAGE_LENGTH, AI_TEMPERATURE, AI_TOP_P, AI_REPEAT_PENALTY
+)
+
+logger = logging.getLogger(__name__)
+
+async def chat_with_ollama(message: str, model: str = DEFAULT_MODEL, 
+                          conversation_history: List[Dict] = None) -> str:
+    """Ollama와 단순 채팅 - MCP 도구 연동 비활성화"""
+    try:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+            # 대화 컨텍스트 구성
+            context_prompt = build_context_prompt(conversation_history)
+            
+            # 단순 한국어 프롬프트 (도구 없음)
+            enhanced_prompt = build_simple_prompt(context_prompt, message)
+            
+            payload = {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": enhanced_prompt
+                    }
+                ],
+                "stream": False,
+                "options": {
+                    "temperature": AI_TEMPERATURE,
+                    "top_p": AI_TOP_P,
+                    "repeat_penalty": AI_REPEAT_PENALTY
+                }
+            }
+            
+            logger.info(f"Ollama에 요청 전송: {message[:50]}...")
+            response = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # AI 응답 추출
+                ai_response = data.get("message", {}).get("content", "응답을 생성할 수 없습니다.").strip()
+                
+                # 답변 후처리
+                ai_response = clean_ai_response(ai_response)
+                
+                logger.info(f"Ollama 응답 받음: {ai_response[:50]}...")
+                return ai_response
+            else:
+                logger.error(f"Ollama API 오류: {response.status_code}")
+                return f"AI 서버 오류가 발생했습니다. (상태 코드: {response.status_code})"
+                
+    except httpx.TimeoutException:
+        logger.error("Ollama 응답 시간 초과")
+        return "AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요."
+    except Exception as e:
+        logger.error(f"Ollama 통신 오류: {str(e)}")
+        return f"AI 서버 연결 오류: {str(e)}"
+
+def build_context_prompt(conversation_history: List[Dict]) -> str:
+    """대화 컨텍스트 프롬프트 구성"""
+    context_prompt = ""
+    if conversation_history and len(conversation_history) > 0:
+        # 중복 메시지 제거 및 최근 메시지만 사용
+        unique_history = []
+        seen_messages = set()
+        
+        for msg in reversed(conversation_history[-MAX_CONVERSATION_HISTORY:]):
+            msg_content = msg.get('content', '').strip()
+            if msg_content and msg_content not in seen_messages:
+                unique_history.append(msg)
+                seen_messages.add(msg_content)
+                if len(unique_history) >= MAX_CONTEXT_MESSAGES:
+                    break
+        
+        if unique_history:
+            context_prompt = "이전 대화:\n"
+            for msg in reversed(unique_history):  # 시간순으로 정렬
+                role_display = "사용자" if msg.get('role') == 'user' else "AI"
+                content = msg.get('content', '')[:MAX_MESSAGE_LENGTH]  # 내용 길이 제한
+                context_prompt += f"{role_display}: {content}\n"
+            context_prompt += "\n현재 질문에 집중하여 답변해주세요.\n\n"
+    
+    return context_prompt
+
+def build_simple_prompt(context_prompt: str, message: str) -> str:
+    """단순 프롬프트 구성 (도구 없음)"""
+    return f"""당신은 친근하고 도움이 되는 한국어 AI 어시스턴트입니다. 다음 규칙을 따라 답변해주세요:
+
+**답변 규칙:**
+1. 반드시 한국어로만 답변
+2. 정중하고 친근한 언어 사용
+3. 명확하고 도움이 되는 답변 제공
+4. 이전 대화 내용을 참고하여 자연스럽게 답변
+5. 코드가 필요한 경우 ```로 감싸서 작성
+6. 중요한 내용은 **굵은 글씨**로 강조
+7. 목록은 - 또는 1. 2. 3. 형식 사용
+8. 과도한 특수기호 사용 금지
+
+**사실 확인 규칙:**
+9. 확실하지 않은 정보는 추측하지 않고 솔직히 말하기
+10. 존재하지 않는 기술이나 정보를 만들어내지 않음
+11. 일상 대화, 상식, 학습, 창작 등 다양한 주제로 자유롭게 대화
+
+{context_prompt}현재 질문: {message}
+
+AI 답변:"""
+
+def clean_ai_response(response: str) -> str:
+    """AI 응답 정리"""
+    # 과도한 줄바꿈 제거
+    response = response.replace('\n\n\n\n', '\n\n')
+    response = response.replace('\n\n\n', '\n\n')
+    
+    # 시작/끝 공백 제거
+    response = response.strip()
+    
+    # 과도한 특수기호 제거
+    response = re.sub(r'[\u2605\u2606\u25a0\u25cf\u25cb\u2661\u2665\u2668\u266a\u266b]{2,}', '', response)
+    
+    return response
